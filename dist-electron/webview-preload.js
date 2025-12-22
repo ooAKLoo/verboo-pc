@@ -7,6 +7,7 @@ const PLATFORM_PATTERNS = [
     { name: 'Twitter', patterns: ['twitter.com', 'x.com'] },
     { name: 'TikTok', patterns: ['tiktok.com'] },
     { name: 'Reddit', patterns: ['reddit.com'] },
+    { name: 'Instagram', patterns: ['instagram.com'] },
 ];
 /**
  * Check if current URL matches a supported platform
@@ -21,70 +22,114 @@ function getMatchedPlatform() {
     return null;
 }
 /**
- * Capture script for XHS (小红书)
+ * Find the closest post/note container from a clicked element
  */
-function captureXHS() {
+function findNoteContainer(element) {
+    if (!element)
+        return null;
+    // Walk up the DOM tree to find the note container
+    let current = element;
+    let depth = 0;
+    const maxDepth = 15; // Prevent infinite loops
+    while (current && depth < maxDepth) {
+        // Check if this is a note card/container
+        const classList = current.classList?.toString() || '';
+        const className = current.className?.toString() || '';
+        // Common XHS note container patterns
+        if (classList.includes('note-item') ||
+            classList.includes('note-card') ||
+            classList.includes('feed-card') ||
+            current.tagName === 'SECTION' && classList.includes('note') ||
+            current.hasAttribute('data-note-id') ||
+            current.querySelector('[class*="note-content"]')) {
+            return current;
+        }
+        current = current.parentElement;
+        depth++;
+    }
+    return null;
+}
+/**
+ * Capture script for XHS (小红书) - capture specific note at clicked position
+ */
+function captureXHS(targetElement) {
     try {
         const result = {
             title: '',
             content: '',
             images: [],
             author: { name: '', avatar: '', profileUrl: '' },
-            tags: []
+            tags: [],
+            stats: { likes: 0, comments: 0, collects: 0, shares: 0 },
+            publishedAt: null
         };
+        // If we have a target element, find the note container
+        let noteContainer = null;
+        if (targetElement) {
+            noteContainer = findNoteContainer(targetElement);
+            console.log('[Verboo] Found note container:', noteContainer);
+        }
+        // If no container found, use the whole page (fallback)
+        const searchRoot = noteContainer || document;
         // Extract title
-        const titleEl = document.querySelector('#detail-title')
-            || document.querySelector('.title')
-            || document.querySelector('[class*="title"]');
+        const titleEl = searchRoot.querySelector('#detail-title')
+            || searchRoot.querySelector('.title')
+            || searchRoot.querySelector('[class*="note-title"]')
+            || searchRoot.querySelector('[class*="title"]');
         if (titleEl) {
             result.title = titleEl.textContent?.trim() || '';
         }
         // Extract content
-        const contentEl = document.querySelector('#detail-desc')
-            || document.querySelector('.desc')
-            || document.querySelector('[class*="content"]')
-            || document.querySelector('.note-text');
+        const contentEl = searchRoot.querySelector('#detail-desc')
+            || searchRoot.querySelector('.desc')
+            || searchRoot.querySelector('[class*="note-content"]')
+            || searchRoot.querySelector('[class*="note-text"]')
+            || searchRoot.querySelector('[class*="content"]');
         if (contentEl) {
             result.content = contentEl.textContent?.trim() || '';
         }
-        // Extract images
-        const imageEls = document.querySelectorAll('.swiper-slide img, .carousel img, [class*="image"] img');
-        if (imageEls.length > 0) {
-            imageEls.forEach(img => {
-                const src = img.src || img.dataset.src;
-                if (src && !result.images.includes(src)) {
-                    result.images.push(src);
-                }
-            });
-        }
-        // Fallback images
-        if (result.images.length === 0) {
-            document.querySelectorAll('img[src*="xhscdn"], img[src*="xiaohongshu"]').forEach(img => {
-                const src = img.src;
-                if (src && src.includes('http') && !result.images.includes(src)) {
-                    result.images.push(src);
-                }
-            });
-        }
-        // Extract author
-        const authorNameEl = document.querySelector('.author-wrapper .name')
-            || document.querySelector('[class*="nickname"]')
-            || document.querySelector('.user-name');
-        if (authorNameEl) {
-            result.author.name = authorNameEl.textContent?.trim() || '';
-        }
-        const authorAvatarEl = document.querySelector('.author-wrapper img')
-            || document.querySelector('[class*="avatar"] img');
-        if (authorAvatarEl) {
-            result.author.avatar = authorAvatarEl.src || '';
-        }
-        const authorLinkEl = document.querySelector('.author-wrapper a')
-            || document.querySelector('[class*="user"] a');
-        if (authorLinkEl) {
-            result.author.profileUrl = authorLinkEl.href || '';
+        // Extract images from the specific note container
+        const imageEls = searchRoot.querySelectorAll('img');
+        const validImages = [];
+        imageEls.forEach(img => {
+            const src = img.src || img.dataset.src || '';
+            // Filter out avatar images and only keep content images
+            const isAvatar = img.classList.toString().includes('avatar') ||
+                img.closest('[class*="avatar"]') !== null ||
+                img.closest('[class*="author"]') !== null ||
+                img.closest('[class*="user"]') !== null ||
+                src.includes('/avatar/') ||
+                (img.width < 100 && img.height < 100); // Small images are likely avatars
+            // Keep large images from XHS CDN
+            if (src &&
+                src.includes('http') &&
+                (src.includes('xhscdn') || src.includes('xiaohongshu')) &&
+                !isAvatar &&
+                !validImages.includes(src)) {
+                validImages.push(src);
+            }
+        });
+        result.images = validImages;
+        // Extract author info
+        const authorContainer = searchRoot.querySelector('[class*="author"]') ||
+            searchRoot.querySelector('[class*="user-info"]');
+        if (authorContainer) {
+            const authorNameEl = authorContainer.querySelector('[class*="name"]') ||
+                authorContainer.querySelector('[class*="nickname"]');
+            if (authorNameEl) {
+                result.author.name = authorNameEl.textContent?.trim() || '';
+            }
+            const authorAvatarEl = authorContainer.querySelector('img');
+            if (authorAvatarEl) {
+                result.author.avatar = authorAvatarEl.src || '';
+            }
+            const authorLinkEl = authorContainer.querySelector('a');
+            if (authorLinkEl) {
+                result.author.profileUrl = authorLinkEl.href || '';
+            }
         }
         // Extract tags
-        document.querySelectorAll('[class*="tag"] a, .hashtag, [id*="hash-tag"]').forEach(tag => {
+        searchRoot.querySelectorAll('[class*="tag"] a, .hashtag, [id*="hash-tag"], a[href*="/search_result"]').forEach(tag => {
             const tagText = tag.textContent?.trim().replace(/^#/, '');
             if (tagText && !result.tags.includes(tagText)) {
                 result.tags.push(tagText);
@@ -99,16 +144,121 @@ function captureXHS() {
                 result.tags.push(tag);
             }
         }
+        // Extract engagement stats (likes, comments, collects, shares)
+        const extractNumber = (text) => {
+            if (!text)
+                return 0;
+            // Handle formats like "1.2万", "1234", "1.2k"
+            const cleaned = text.replace(/[^\d.万kKwW]/g, '');
+            if (cleaned.includes('万') || cleaned.toLowerCase().includes('w')) {
+                return Math.round(parseFloat(cleaned) * 10000);
+            }
+            if (cleaned.toLowerCase().includes('k')) {
+                return Math.round(parseFloat(cleaned) * 1000);
+            }
+            return parseInt(cleaned) || 0;
+        };
+        // Find engagement stats in the note container
+        const statsContainer = searchRoot.querySelector('[class*="interact"]') ||
+            searchRoot.querySelector('[class*="engagement"]') ||
+            searchRoot.querySelector('[class*="footer"]');
+        if (statsContainer) {
+            // Extract likes (点赞)
+            const likeEls = statsContainer.querySelectorAll('[class*="like"], [class*="zan"]');
+            likeEls.forEach(el => {
+                const text = el.textContent?.trim() || '';
+                const num = extractNumber(text);
+                if (num > 0 && num > result.stats.likes) {
+                    result.stats.likes = num;
+                }
+            });
+            // Extract comments (评论)
+            const commentEls = statsContainer.querySelectorAll('[class*="comment"], [class*="pinglun"]');
+            commentEls.forEach(el => {
+                const text = el.textContent?.trim() || '';
+                const num = extractNumber(text);
+                if (num > 0 && num > result.stats.comments) {
+                    result.stats.comments = num;
+                }
+            });
+            // Extract collects (收藏)
+            const collectEls = statsContainer.querySelectorAll('[class*="collect"], [class*="shoucang"], [class*="star"]');
+            collectEls.forEach(el => {
+                const text = el.textContent?.trim() || '';
+                const num = extractNumber(text);
+                if (num > 0 && num > result.stats.collects) {
+                    result.stats.collects = num;
+                }
+            });
+            // Extract shares (分享)
+            const shareEls = statsContainer.querySelectorAll('[class*="share"], [class*="fenxiang"]');
+            shareEls.forEach(el => {
+                const text = el.textContent?.trim() || '';
+                const num = extractNumber(text);
+                if (num > 0 && num > result.stats.shares) {
+                    result.stats.shares = num;
+                }
+            });
+        }
+        // Extract published time (发布时间)
+        const timeEl = searchRoot.querySelector('[class*="time"]') ||
+            searchRoot.querySelector('[class*="date"]') ||
+            searchRoot.querySelector('[class*="publish"]') ||
+            searchRoot.querySelector('time');
+        if (timeEl) {
+            const timeText = timeEl.textContent?.trim() || '';
+            const timeAttr = timeEl.getAttribute('datetime') ||
+                timeEl.getAttribute('data-time');
+            // Try to parse the time
+            if (timeAttr) {
+                result.publishedAt = new Date(timeAttr).toISOString();
+            }
+            else if (timeText) {
+                // Parse relative time like "5分钟前", "2小时前", "昨天 20:30"
+                const now = new Date();
+                if (timeText.includes('分钟前')) {
+                    const minutes = parseInt(timeText);
+                    result.publishedAt = new Date(now.getTime() - minutes * 60000).toISOString();
+                }
+                else if (timeText.includes('小时前')) {
+                    const hours = parseInt(timeText);
+                    result.publishedAt = new Date(now.getTime() - hours * 3600000).toISOString();
+                }
+                else if (timeText.includes('天前')) {
+                    const days = parseInt(timeText);
+                    result.publishedAt = new Date(now.getTime() - days * 86400000).toISOString();
+                }
+                else if (timeText.includes('昨天')) {
+                    const yesterday = new Date(now);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    result.publishedAt = yesterday.toISOString();
+                }
+                else {
+                    // Try direct date parse
+                    try {
+                        const parsed = new Date(timeText);
+                        if (!isNaN(parsed.getTime())) {
+                            result.publishedAt = parsed.toISOString();
+                        }
+                    }
+                    catch (e) {
+                        // Ignore parse errors
+                    }
+                }
+            }
+        }
+        console.log('[Verboo] Captured data:', result);
         return result;
     }
     catch (error) {
+        console.error('[Verboo] Capture error:', error);
         return { error: error.message };
     }
 }
 /**
  * Capture content based on current platform
  */
-function captureContent() {
+function captureContent(targetElement) {
     const platform = getMatchedPlatform();
     if (!platform) {
         return { error: 'Unsupported platform' };
@@ -116,7 +266,7 @@ function captureContent() {
     let rawData;
     switch (platform) {
         case '小红书':
-            rawData = captureXHS();
+            rawData = captureXHS(targetElement);
             break;
         // Future platforms can be added here
         default:
@@ -133,84 +283,49 @@ function captureContent() {
         author: rawData.author,
         tags: rawData.tags,
         originalUrl: window.location.href,
-        capturedAt: new Date().toISOString()
+        capturedAt: new Date().toISOString(),
+        publishedAt: rawData.publishedAt,
+        stats: rawData.stats
     };
 }
-// Expose a safe API to the guest page - must run before page scripts
-(function () {
-    console.log('Verboo: webview-preload.js loaded');
-    window.verboo = {
-        sendData: (data) => {
-            console.log('Verboo: Sending data to host', data);
-            electron_1.ipcRenderer.sendToHost('plugin-data', data);
-        },
-        captureContent: async () => {
-            return captureContent();
-        }
-    };
-    // Also make it available as early as possible
-    Object.defineProperty(window, 'verboo', {
-        value: window.verboo,
-        writable: false,
-        configurable: false
-    });
-    // ============ Context Menu Handler ============
+// Expose API to renderer via contextBridge
+electron_1.contextBridge.exposeInMainWorld('verboo', {
+    sendData: (data) => {
+        console.log('Verboo: Sending data to host', data);
+        electron_1.ipcRenderer.send('plugin-data', data);
+    },
+    captureContent: async () => {
+        return captureContent();
+    }
+});
+console.log('Verboo: webview-preload.js loaded with contextBridge');
+// ============ Context Menu Handler ============
+// Store the last clicked element for capture
+let lastClickedElement = null;
+window.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('contextmenu', (e) => {
         const platform = getMatchedPlatform();
         console.log('[Verboo] Context menu triggered, platform:', platform);
-        // Send message to host to show custom menu
-        electron_1.ipcRenderer.sendToHost('show-context-menu', {
-            x: e.clientX,
-            y: e.clientY,
-            canCapture: platform !== null,
-            platform: platform
+        // Store the clicked element
+        lastClickedElement = e.target;
+        console.log('[Verboo] Clicked element:', lastClickedElement);
+        // Prevent default context menu
+        e.preventDefault();
+        // Send message to main process to show custom menu
+        electron_1.ipcRenderer.send('show-context-menu', {
+            platform: platform,
+            canCapture: platform !== null
         });
     });
     // Listen for capture command from main process
     electron_1.ipcRenderer.on('execute-capture', () => {
-        console.log('[Verboo] Capture command received');
-        const result = captureContent();
-        electron_1.ipcRenderer.sendToHost('capture-result', result);
+        console.log('[Verboo] Capture command received, target element:', lastClickedElement);
+        const result = captureContent(lastClickedElement || undefined);
+        console.log('[Verboo] Capture result:', result);
+        // Send result to main process
+        electron_1.ipcRenderer.send('capture-result', result);
+        // Clear the clicked element
+        lastClickedElement = null;
     });
-    // Monitor video playback time
-    let videoTimeInterval = null;
-    function startVideoTimeMonitoring() {
-        if (videoTimeInterval)
-            return; // Already monitoring
-        videoTimeInterval = setInterval(() => {
-            // Try to find video element
-            let videoElement = null;
-            let currentTime = 0;
-            // YouTube
-            const youtubeVideo = document.querySelector('video.html5-main-video');
-            if (youtubeVideo && !youtubeVideo.paused) {
-                videoElement = youtubeVideo;
-                currentTime = youtubeVideo.currentTime;
-            }
-            // Bilibili
-            if (!videoElement) {
-                const bilibiliVideo = document.querySelector('video');
-                if (bilibiliVideo && !bilibiliVideo.paused) {
-                    videoElement = bilibiliVideo;
-                    currentTime = bilibiliVideo.currentTime;
-                }
-            }
-            // Send time update if video is playing
-            if (videoElement && currentTime > 0) {
-                electron_1.ipcRenderer.sendToHost('video-time-update', {
-                    currentTime,
-                    duration: videoElement.duration,
-                    paused: videoElement.paused
-                });
-            }
-        }, 500); // Check every 500ms
-    }
-    // Start monitoring after page loads
-    window.addEventListener('DOMContentLoaded', () => {
-        setTimeout(startVideoTimeMonitoring, 1000); // Wait 1s for video to load
-    });
-    // Also try immediately if DOM is already loaded
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(startVideoTimeMonitoring, 1000);
-    }
-})();
+    console.log('[Verboo] Context menu handler registered');
+});

@@ -26,6 +26,21 @@ function App() {
   const browserRef = React.useRef<BrowserViewHandle>(null);
   const { ipcRenderer } = window.require('electron');
 
+  // Listen for material saved event
+  React.useEffect(() => {
+    const handleMaterialSaved = (_event: any, data: any) => {
+      console.log('[App] Material saved:', data);
+      setMaterialRefreshTrigger(prev => prev + 1);
+      if (rightCollapsed) setRightCollapsed(false);
+    };
+
+    ipcRenderer.on('material-saved', handleMaterialSaved);
+
+    return () => {
+      ipcRenderer.removeListener('material-saved', handleMaterialSaved);
+    };
+  }, [rightCollapsed]);
+
   // Tab management functions
   const handleNewTab = () => {
     const newTabId = `tab-${Date.now()}`;

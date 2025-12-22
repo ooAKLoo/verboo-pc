@@ -22,6 +22,8 @@ interface MaterialRow {
     original_url: string;
     captured_at: string;
     created_at: string;
+    published_at: string | null;
+    stats: string | null;
 }
 
 interface Material {
@@ -39,6 +41,14 @@ interface Material {
     originalUrl: string;
     capturedAt: Date;
     createdAt: Date;
+    publishedAt?: Date;
+    stats?: {
+        likes?: number;
+        comments?: number;
+        shares?: number;
+        collects?: number;
+        views?: number;
+    };
 }
 
 interface SaveMaterialInput {
@@ -54,6 +64,14 @@ interface SaveMaterialInput {
     images: string[];
     originalUrl: string;
     capturedAt: Date;
+    publishedAt?: Date;
+    stats?: {
+        likes?: number;
+        comments?: number;
+        shares?: number;
+        collects?: number;
+        views?: number;
+    };
 }
 
 let db: Database.Database | null = null;
@@ -94,13 +112,27 @@ export function initDatabase(): Database.Database {
       images TEXT,
       original_url TEXT NOT NULL,
       captured_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      published_at TEXT,
+      stats TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_materials_platform ON materials(platform);
     CREATE INDEX IF NOT EXISTS idx_materials_captured_at ON materials(captured_at);
     CREATE INDEX IF NOT EXISTS idx_materials_created_at ON materials(created_at);
   `);
+
+    // Add published_at and stats columns if they don't exist (for existing databases)
+    try {
+        db.exec('ALTER TABLE materials ADD COLUMN published_at TEXT');
+    } catch (e) {
+        // Column already exists
+    }
+    try {
+        db.exec('ALTER TABLE materials ADD COLUMN stats TEXT');
+    } catch (e) {
+        // Column already exists
+    }
 
     console.log('[Database] Database initialized successfully');
     return db;
@@ -146,6 +178,8 @@ function rowToMaterial(row: MaterialRow): Material {
         originalUrl: row.original_url,
         capturedAt: new Date(row.captured_at),
         createdAt: new Date(row.created_at),
+        publishedAt: row.published_at ? new Date(row.published_at) : undefined,
+        stats: row.stats ? JSON.parse(row.stats) : undefined,
     };
 }
 
@@ -157,9 +191,9 @@ export function saveMaterial(input: SaveMaterialInput): Material {
 
     const stmt = db.prepare(`
     INSERT INTO materials (
-      platform, title, content, author_name, author_avatar, 
-      author_profile_url, tags, images, original_url, captured_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      platform, title, content, author_name, author_avatar,
+      author_profile_url, tags, images, original_url, captured_at, published_at, stats
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
     const result = stmt.run(
@@ -172,7 +206,9 @@ export function saveMaterial(input: SaveMaterialInput): Material {
         JSON.stringify(input.tags),
         JSON.stringify(input.images),
         input.originalUrl,
-        input.capturedAt.toISOString()
+        input.capturedAt.toISOString(),
+        input.publishedAt ? input.publishedAt.toISOString() : null,
+        input.stats ? JSON.stringify(input.stats) : null
     );
 
     console.log('[Database] Saved material with ID:', result.lastInsertRowid);

@@ -16,6 +16,17 @@ export interface Author {
 }
 
 /**
+ * Engagement statistics for a post
+ */
+export interface EngagementStats {
+    likes?: number;      // 点赞数
+    comments?: number;   // 评论数
+    shares?: number;     // 分享数
+    collects?: number;   // 收藏数
+    views?: number;      // 浏览数
+}
+
+/**
  * Result of capturing content from a platform
  */
 export interface CaptureResult {
@@ -27,6 +38,8 @@ export interface CaptureResult {
     tags: string[];
     originalUrl: string;
     capturedAt: Date;
+    publishedAt?: Date;  // 发帖时间
+    stats?: EngagementStats;  // 互动统计
 }
 
 /**
@@ -85,6 +98,8 @@ export interface MaterialRow {
     original_url: string;
     captured_at: string;
     created_at: string;
+    published_at: string | null;  // 发帖时间
+    stats: string | null;  // JSON string for engagement stats
 }
 
 /**
@@ -106,6 +121,8 @@ export function rowToMaterial(row: MaterialRow): Material {
         originalUrl: row.original_url,
         capturedAt: new Date(row.captured_at),
         createdAt: new Date(row.created_at),
+        publishedAt: row.published_at ? new Date(row.published_at) : undefined,
+        stats: row.stats ? JSON.parse(row.stats) : undefined,
     };
 }
 
@@ -124,5 +141,7 @@ export function captureResultToRow(result: CaptureResult): Omit<MaterialRow, 'id
         images: JSON.stringify(result.images),
         original_url: result.originalUrl,
         captured_at: result.capturedAt.toISOString(),
+        published_at: result.publishedAt ? result.publishedAt.toISOString() : null,
+        stats: result.stats ? JSON.stringify(result.stats) : null,
     };
 }
