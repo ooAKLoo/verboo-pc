@@ -5,11 +5,14 @@ import { BrowserView } from './components/BrowserView';
 import type { BrowserViewHandle } from './components/BrowserView';
 import { InfoPanel } from './components/InfoPanel';
 import { TabBar, type Tab } from './components/TabBar';
+import { SubtitleDialog } from './components/SubtitleDialog';
+import type { SubtitleItem } from './utils/subtitleParser';
 import { PanelLeft, PanelRight } from 'lucide-react';
 
 function App() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
 
   // Tab management
   const [tabs, setTabs] = useState<Tab[]>([{
@@ -97,8 +100,7 @@ function App() {
       const url = browserRef.current.getCurrentUrl();
 
       if (!url.includes('youtube.com/watch')) {
-        alert('请先打开 YouTube 视频页面');
-        return;
+        throw new Error('请先打开 YouTube 视频页面');
       }
 
       console.log('Calling IPC to get subtitles for:', url);
@@ -113,19 +115,34 @@ function App() {
           [activeTabId]: response.data
         });
         if (rightCollapsed) setRightCollapsed(false);
-        alert(`字幕提取成功!共 ${response.data.length} 条`);
       } else {
-        console.error('Failed to get subtitles:', response.error);
-        alert('提取失败: ' + response.error);
+        throw new Error(response.error || '获取失败');
       }
     } catch (error) {
-      console.error('IPC call failed:', error);
-      alert('提取失败: ' + String(error));
+      console.error('Failed to get subtitles:', error);
+      throw error;
     }
+  };
+
+  const handleImportSubtitles = (subtitles: SubtitleItem[]) => {
+    setTabData({
+      ...tabData,
+      [activeTabId]: subtitles
+    });
+    if (rightCollapsed) setRightCollapsed(false);
   };
 
   return (
     <div className="w-full h-full font-sans antialiased text-primary bg-background selection:bg-accent/20">
+      {/* Subtitle Dialog */}
+      <SubtitleDialog
+        isOpen={isSubtitleDialogOpen}
+        onClose={() => setIsSubtitleDialogOpen(false)}
+        onSubtitlesImport={handleImportSubtitles}
+        onAutoFetch={handleGetYouTubeSubtitles}
+        currentUrl={browserRef.current?.getCurrentUrl() || ''}
+      />
+
       {/* Floating Toggle Buttons */}
       <div className="fixed top-4 left-4 z-50">
         <button
@@ -148,7 +165,7 @@ function App() {
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
-        left={<Sidebar onRunPlugin={handleRunPlugin} onGetYouTubeSubtitles={handleGetYouTubeSubtitles} />}
+        left={<Sidebar onRunPlugin={handleRunPlugin} onOpenSubtitleDialog={() => setIsSubtitleDialogOpen(true)} />}
         main={
           <div className="flex flex-col h-full">
             <TabBar

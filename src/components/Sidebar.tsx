@@ -1,9 +1,9 @@
 interface SidebarProps {
     onRunPlugin: (script: string) => void;
-    onGetYouTubeSubtitles: () => Promise<void>;
+    onOpenSubtitleDialog: () => void;
 }
 
-export function Sidebar({ onRunPlugin, onGetYouTubeSubtitles }: SidebarProps) {
+export function Sidebar({ onRunPlugin, onOpenSubtitleDialog }: SidebarProps) {
     return (
         <div className="h-full flex flex-col py-4 font-sans bg-white">
             {/* Header */}
@@ -31,11 +31,11 @@ export function Sidebar({ onRunPlugin, onGetYouTubeSubtitles }: SidebarProps) {
                 </div>
 
                 <div
-                    onClick={onGetYouTubeSubtitles}
+                    onClick={onOpenSubtitleDialog}
                     className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
                 >
-                    <span className="text-[13px] font-medium text-[#18181b]">YouTube Transcript</span>
-                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">获取完整字幕</span>
+                    <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
+                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">自动获取或手动导入</span>
                 </div>
             </div>
         </div>
