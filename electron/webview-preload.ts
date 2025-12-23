@@ -13,6 +13,133 @@ declare global {
     }
 }
 
+// ============ Anti-Detection: Override navigator properties ============
+// This must run before any page scripts to prevent Electron detection
+
+(function hideElectronFingerprints() {
+    // Remove webdriver property (used to detect automation)
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    // Override plugins to appear as a normal Chrome browser
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            const plugins = [
+                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+            ];
+            const pluginArray = plugins.map((p, i) => {
+                const plugin = {
+                    ...p,
+                    length: 1,
+                    item: (idx: number) => idx === 0 ? plugin : null,
+                    namedItem: (name: string) => name === p.name ? plugin : null,
+                    [Symbol.iterator]: function* () { yield plugin; }
+                };
+                return plugin;
+            });
+            (pluginArray as any).item = (i: number) => pluginArray[i] || null;
+            (pluginArray as any).namedItem = (name: string) => pluginArray.find(p => p.name === name) || null;
+            (pluginArray as any).refresh = () => { };
+            return pluginArray;
+        },
+        configurable: true
+    });
+
+    // Override languages
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['zh-CN', 'zh', 'en-US', 'en'],
+        configurable: true
+    });
+
+    // Override platform if needed (already looks normal in most cases)
+    // Prevent chrome.runtime detection which is undefined in Electron
+    if (!(window as any).chrome) {
+        (window as any).chrome = {};
+    }
+    if (!(window as any).chrome.runtime) {
+        (window as any).chrome.runtime = {};
+    }
+
+    // Override permissions API to appear normal
+    if (navigator.permissions) {
+        const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = (parameters: any) => {
+            // Return granted for notifications to avoid detection
+            if (parameters.name === 'notifications') {
+                return Promise.resolve({ state: 'prompt', onchange: null } as PermissionStatus);
+            }
+            return originalQuery(parameters);
+        };
+    }
+
+    // Hide Electron-specific process object from window
+    try {
+        if ((window as any).process) {
+            delete (window as any).process;
+        }
+    } catch (e) {
+        // Ignore if not deletable
+    }
+
+    // Override user agent in navigator (backup, main one is set via webview attribute)
+    const chromeVersion = '120.0.0.0';
+    const platform = navigator.platform;
+    let userAgent: string;
+
+    if (platform.includes('Mac')) {
+        userAgent = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else if (platform.includes('Win')) {
+        userAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else {
+        userAgent = `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    }
+
+    Object.defineProperty(navigator, 'userAgent', {
+        get: () => userAgent,
+        configurable: true
+    });
+
+    // Override appVersion to match
+    Object.defineProperty(navigator, 'appVersion', {
+        get: () => userAgent.replace('Mozilla/', ''),
+        configurable: true
+    });
+
+    // Add WebGL vendor and renderer to appear as normal browser
+    const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function (parameter: number) {
+        // UNMASKED_VENDOR_WEBGL
+        if (parameter === 37445) {
+            return 'Google Inc. (Apple)';
+        }
+        // UNMASKED_RENDERER_WEBGL
+        if (parameter === 37446) {
+            return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
+        }
+        return getParameterProto.call(this, parameter);
+    };
+
+    // Same for WebGL2
+    if (typeof WebGL2RenderingContext !== 'undefined') {
+        const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
+        WebGL2RenderingContext.prototype.getParameter = function (parameter: number) {
+            if (parameter === 37445) {
+                return 'Google Inc. (Apple)';
+            }
+            if (parameter === 37446) {
+                return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
+            }
+            return getParameterProto2.call(this, parameter);
+        };
+    }
+
+    console.log('[Verboo] Anti-detection measures applied');
+})();
+
 // Platform detection patterns
 const PLATFORM_PATTERNS = [
     { name: '小红书', patterns: ['xiaohongshu.com', 'xhslink.com', 'xhs.cn'] },

@@ -26,7 +26,26 @@ if (process.env.VITE_DEV_SERVER_URL) {
     app.commandLine.appendSwitch('ignore-certificate-errors');
 }
 
+// Get a realistic Chrome User-Agent based on platform
+function getChromeUserAgent(): string {
+    const chromeVersion = '120.0.0.0';
+    const platform = process.platform;
+
+    if (platform === 'darwin') {
+        return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else if (platform === 'win32') {
+        return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else {
+        return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    }
+}
+
+// Export for use in renderer
+export const CHROME_USER_AGENT = getChromeUserAgent();
+
 function createWindow() {
+    const userAgent = getChromeUserAgent();
+
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -35,18 +54,27 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false,
             webviewTag: true,
-            webSecurity: true, // Keep web security enabled
+            webSecurity: true,
         },
     });
 
+    // Set User-Agent for webview session to avoid Electron detection
+    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+        details.requestHeaders['User-Agent'] = userAgent;
+        // Remove headers that might expose Electron
+        delete details.requestHeaders['Sec-Ch-Ua'];
+        callback({ requestHeaders: details.requestHeaders });
+    });
+
+    // Override User-Agent for the default session
+    session.defaultSession.setUserAgent(userAgent);
+
     // Handle certificate errors for webview
     mainWindow.webContents.session.setCertificateVerifyProc((request, callback) => {
-        // In development, allow all certificates
-        // In production, you should properly verify certificates
         if (process.env.VITE_DEV_SERVER_URL) {
-            callback(0); // 0 means success
+            callback(0);
         } else {
-            callback(-3); // Use default verification
+            callback(-3);
         }
     });
 

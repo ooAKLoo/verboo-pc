@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, Plus } from 'lucide-react';
 
 export interface Tab {
     id: string;
@@ -63,9 +64,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
                                     }}
                                     className="flex items-center justify-center w-4 h-4 rounded hover:bg-gray-200 transition-colors opacity-0 group-hover:opacity-100"
                                 >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M18 6L6 18M6 6l12 12" />
-                                    </svg>
+                                    <X size={10} />
                                 </button>
                             )}
                         </div>
@@ -79,9 +78,7 @@ export function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }: 
                 className="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
                 title="New Tab"
             >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 5v14M5 12h14" />
-                </svg>
+                <Plus size={16} />
             </button>
         </div>
     );

@@ -4,7 +4,7 @@
  * Manages all platform adapters and provides URL matching functionality.
  */
 
-import type { PlatformAdapter, CaptureResult } from './types';
+import type { PlatformAdapter } from './types';
 
 class AdapterRegistry {
     private adapters: PlatformAdapter[] = [];

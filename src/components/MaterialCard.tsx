@@ -6,6 +6,7 @@
  */
 
 import React, { useState } from 'react';
+import { Trash2, ExternalLink, BookMarked, Twitter, Music, Hash } from 'lucide-react';
 
 export interface Material {
     id: number;
@@ -31,18 +32,18 @@ interface MaterialCardProps {
 }
 
 // Platform icon mapping
-const PLATFORM_ICONS: { [key: string]: string } = {
-    '小红书': '📕',
-    'Twitter': '🐦',
-    'TikTok': '🎵',
-    'Reddit': '🔶',
+const PLATFORM_ICONS: { [key: string]: React.ReactNode } = {
+    '小红书': <BookMarked size={12} />,
+    'Twitter': <Twitter size={12} />,
+    'TikTok': <Music size={12} />,
+    'Reddit': <Hash size={12} />,
 };
 
 export function MaterialCard({ material, onDelete, onOpenLink }: MaterialCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [imageError, setImageError] = useState(false);
 
-    const platformIcon = PLATFORM_ICONS[material.platform] || '📄';
+    const platformIcon = PLATFORM_ICONS[material.platform] || <BookMarked size={12} />;
     const hasImages = material.images && material.images.length > 0;
     const primaryImage = hasImages ? material.images[0] : null;
 
@@ -113,9 +114,7 @@ export function MaterialCard({ material, onDelete, onOpenLink }: MaterialCardPro
                     className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
                     title="删除"
                 >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
+                    <Trash2 size={14} />
                 </button>
             </div>
 
@@ -178,11 +177,7 @@ export function MaterialCard({ material, onDelete, onOpenLink }: MaterialCardPro
                             className="text-xs text-blue-500 hover:text-blue-600 hover:underline flex items-center gap-1"
                         >
                             查看原帖
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                <polyline points="15 3 21 3 21 9" />
-                                <line x1="10" y1="14" x2="21" y2="3" />
-                            </svg>
+                            <ExternalLink size={12} />
                         </button>
                     </div>
                 </div>

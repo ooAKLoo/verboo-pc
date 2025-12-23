@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MaterialCard } from './MaterialCard';
 import type { Material } from './MaterialCard';
+import { RefreshCw, Loader2, Image } from 'lucide-react';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -102,10 +103,7 @@ export function MaterialPanel({ onOpenLink, refreshTrigger }: MaterialPanelProps
                         className="p-1.5 hover:bg-gray-100 rounded-md transition-colors text-gray-500"
                         title="刷新"
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M23 4v6h-6M1 20v-6h6" />
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                        </svg>
+                        <RefreshCw size={16} />
                     </button>
                 </div>
                 <input
@@ -122,19 +120,13 @@ export function MaterialPanel({ onOpenLink, refreshTrigger }: MaterialPanelProps
                 {loading ? (
                     <div className="h-full flex items-center justify-center text-gray-400">
                         <div className="flex flex-col items-center gap-2">
-                            <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                            </svg>
+                            <Loader2 size={24} className="animate-spin" />
                             <span className="text-xs">加载中...</span>
                         </div>
                     </div>
                 ) : materials.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-3">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="opacity-30">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                        </svg>
+                        <Image size={48} strokeWidth={1} className="opacity-30" />
                         <div className="text-center">
                             <p className="text-sm font-medium text-gray-500">暂无素材</p>
                             <p className="text-xs text-gray-400 mt-1">

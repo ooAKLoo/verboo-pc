@@ -1,10 +1,19 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
 
 // Type definition for the webview tag to avoid TS errors
 declare global {
     namespace JSX {
         interface IntrinsicElements {
-            'webview': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { src?: string; id?: string }, HTMLElement>;
+            'webview': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+                src?: string;
+                id?: string;
+                useragent?: string;
+                partition?: string;
+                webpreferences?: string;
+                allowpopups?: string | boolean;
+                preload?: string;
+            }, HTMLElement>;
         }
     }
 }
@@ -17,12 +26,28 @@ declare global {
 // This avoids Vite trying to bundle the 'electron' or 'path' npm packages.
 declare global {
     interface Window {
-        require: NodeRequire;
+        require: (module: string) => any;
     }
 }
 
 const { ipcRenderer } = window.require('electron');
 const path = window.require('path');
+
+// Generate Chrome-like User-Agent based on platform
+function getChromeUserAgent(): string {
+    const chromeVersion = '120.0.0.0';
+    const platform = window.navigator.platform;
+
+    if (platform.includes('Mac')) {
+        return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else if (platform.includes('Win')) {
+        return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    } else {
+        return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
+    }
+}
+
+const CHROME_USER_AGENT = getChromeUserAgent();
 
 export interface BrowserViewHandle {
     executeScript: (script: string) => Promise<any>;
@@ -186,20 +211,20 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                                 disabled={!canGoBack}
                                 className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoBack ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
                             >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                                <ArrowLeft size={16} />
                             </button>
                             <button
                                 onClick={goForward}
                                 disabled={!canGoForward}
                                 className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoForward ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
                             >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                                <ArrowRight size={16} />
                             </button>
                             <button onClick={reload} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
                                 {isLoading ? (
-                                    <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                                    <Loader2 size={16} className="animate-spin" />
                                 ) : (
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+                                    <RotateCw size={16} />
                                 )}
                             </button>
                         </div>
@@ -222,11 +247,11 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                         ref={webviewRef}
                         src={url}
                         className="w-full h-full rounded-none shadow-inner bg-white"
-                        // @ts-ignore - webview specific attributes
                         preload={`file://${preloadPath}`}
-                        allowpopups="true"
-                        nodeintegration="true"
-                        webpreferences="contextIsolation=false"
+                        useragent={CHROME_USER_AGENT}
+                        allowpopups={"true"}
+                        partition="persist:webview"
+                        webpreferences="contextIsolation=no, nodeIntegration=yes, enableRemoteModule=no, javascript=yes, plugins=yes, webSecurity=yes"
                     />
                 </div>
             </div>

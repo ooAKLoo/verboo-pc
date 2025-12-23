@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { MaterialPanel } from './MaterialPanel';
+import { FileText, Package, SearchX, FileX } from 'lucide-react';
 
 interface InfoPanelProps {
     data: any;
@@ -116,27 +117,38 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
         return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
     };
 
-    // Tab button component
-    const TabButton = ({ tab, label, icon }: { tab: TabType; label: string; icon: string }) => (
-        <button
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 ${activeTab === tab
-                ? 'bg-blue-50 text-blue-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}
-        >
-            <span>{icon}</span>
-            <span>{label}</span>
-        </button>
-    );
+    const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
+        { id: 'subtitles', label: '字幕', icon: FileText },
+        { id: 'materials', label: '素材', icon: Package },
+    ];
 
     return (
         <div className="h-full flex flex-col font-sans bg-white text-primary">
-            {/* Tab Navigation */}
-            <div className="px-3 pt-3 pb-2 border-b border-gray-100">
-                <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
-                    <TabButton tab="subtitles" label="字幕" icon="📜" />
-                    <TabButton tab="materials" label="素材" icon="📦" />
+            {/* Tab Navigation - Linear Style */}
+            <div className="px-4 pt-4 pb-3">
+                <div className="relative flex p-0.5 bg-[#f4f4f5] rounded-lg">
+                    {/* Sliding indicator */}
+                    <div
+                        className="absolute top-0.5 bottom-0.5 rounded-md bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-200 ease-out"
+                        style={{
+                            width: `calc(50% - 2px)`,
+                            left: activeTab === 'subtitles' ? '2px' : 'calc(50% + 0px)',
+                        }}
+                    />
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`relative z-10 flex-1 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+                                activeTab === tab.id
+                                    ? 'text-[#18181b]'
+                                    : 'text-[#71717a] hover:text-[#3f3f46]'
+                            }`}
+                        >
+                            <tab.icon size={14} strokeWidth={1.75} />
+                            <span>{tab.label}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -151,52 +163,61 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
             {/* Subtitles Tab */}
             {activeTab === 'subtitles' && (
                 <>
-                    <div className="px-4 py-3 border-b border-gray-100">
-                        <div className="flex items-center justify-between mb-2">
-                            <h2 className="text-sm font-medium text-gray-800">字幕</h2>
-                            <div className="flex gap-2 items-center">
+                    {/* Toolbar - Linear Style */}
+                    <div className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                            {/* Search Input */}
+                            {Array.isArray(data) && data.length > 0 && (
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="text"
+                                        placeholder="搜索字幕..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
+                                    />
+                                </div>
+                            )}
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1">
                                 {Array.isArray(data) && data.length > 0 && (
-                                    <div className="flex gap-1">
+                                    <>
                                         <button
                                             onClick={exportAsText}
-                                            className="text-xs px-2 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
+                                            className="h-8 px-2.5 text-[12px] font-medium text-[#52525b] bg-transparent hover:bg-[#f4f4f5] rounded-md transition-colors duration-150"
                                             title="导出为文本"
                                         >
                                             TXT
                                         </button>
                                         <button
                                             onClick={exportAsSRT}
-                                            className="text-xs px-2 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
+                                            className="h-8 px-2.5 text-[12px] font-medium text-[#52525b] bg-transparent hover:bg-[#f4f4f5] rounded-md transition-colors duration-150"
                                             title="导出为SRT字幕"
                                         >
                                             SRT
                                         </button>
-                                    </div>
+                                        <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
+                                    </>
                                 )}
                                 <button
                                     onClick={() => setAutoScroll(!autoScroll)}
-                                    className={`text-xs px-2 py-1 rounded transition-colors ${autoScroll ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500'}`}
+                                    className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
+                                        autoScroll
+                                            ? 'text-[#18181b] bg-[#f4f4f5]'
+                                            : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
+                                    }`}
                                 >
-                                    {autoScroll ? '自动滚动' : '手动滚动'}
+                                    {autoScroll ? '自动' : '手动'}
                                 </button>
                             </div>
                         </div>
-                        {Array.isArray(data) && data.length > 0 && (
-                            <input
-                                type="text"
-                                placeholder="搜索字幕..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 transition-colors"
-                            />
-                        )}
                     </div>
 
-                    <div ref={scrollRef} className="flex-1 bg-gray-50/50 overflow-auto">
+                    {/* Subtitle List - Linear Style */}
+                    <div ref={scrollRef} className="flex-1 overflow-auto">
                         {Array.isArray(filteredData) && filteredData.length > 0 ? (
-                            <div className="divide-y divide-gray-100">
+                            <div className="pb-6">
                                 {filteredData.map((item, index) => {
-                                    // Check if this is the current subtitle being played
                                     const isCurrent = item.start !== undefined &&
                                         currentVideoTime > 0 &&
                                         item.start <= currentVideoTime &&
@@ -206,37 +227,45 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                                         <div
                                             key={index}
                                             ref={(el) => { itemRefs.current[index] = el; }}
-                                            className={`px-4 py-3 transition-colors cursor-pointer group ${isCurrent ? 'bg-blue-100/80 border-l-4 border-blue-500' : 'hover:bg-blue-50/50'
-                                                }`}
+                                            className={`group px-4 py-2.5 transition-all duration-200 cursor-default ${
+                                                isCurrent
+                                                    ? 'bg-[#fafafa]'
+                                                    : 'hover:bg-[#fafafa]/50'
+                                            }`}
                                         >
                                             {item.start !== undefined ? (
-                                                // Transcript item with timestamp
                                                 <div className="flex gap-3 items-start">
-                                                    <div className="text-xs text-blue-600 font-mono font-medium min-w-[45px] pt-0.5 group-hover:text-blue-700">
+                                                    {/* Timestamp */}
+                                                    <div className={`text-[11px] font-mono tabular-nums min-w-[42px] pt-0.5 transition-colors duration-200 ${
+                                                        isCurrent ? 'text-[#18181b]' : 'text-[#a1a1aa] group-hover:text-[#71717a]'
+                                                    }`}>
                                                         {formatTime(item.start)}
                                                     </div>
+                                                    {/* Content */}
                                                     <div className="flex-1 space-y-1">
-                                                        {/* Original text */}
-                                                        <div className="text-sm text-gray-700 font-sans leading-relaxed">
+                                                        <div className={`text-[13px] leading-[1.6] transition-colors duration-200 ${
+                                                            isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
+                                                        }`}>
                                                             {searchTerm ? (
                                                                 <span dangerouslySetInnerHTML={{
                                                                     __html: (item.text || '').replace(
                                                                         new RegExp(searchTerm, 'gi'),
-                                                                        (match: string) => `<mark class="bg-yellow-200 px-0.5">${match}</mark>`
+                                                                        (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
                                                                     )
                                                                 }} />
                                                             ) : (
                                                                 item.text
                                                             )}
                                                         </div>
-                                                        {/* Translation if available */}
                                                         {item.translation && (
-                                                            <div className="text-sm text-gray-500 font-sans leading-relaxed border-l-2 border-blue-200 pl-2">
+                                                            <div className={`text-[12px] leading-[1.5] transition-colors duration-200 ${
+                                                                isCurrent ? 'text-[#71717a]' : 'text-[#a1a1aa]'
+                                                            }`}>
                                                                 {searchTerm ? (
                                                                     <span dangerouslySetInnerHTML={{
                                                                         __html: (item.translation || '').replace(
                                                                             new RegExp(searchTerm, 'gi'),
-                                                                            (match: string) => `<mark class="bg-yellow-200 px-0.5">${match}</mark>`
+                                                                            (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
                                                                         )
                                                                     }} />
                                                                 ) : (
@@ -248,11 +277,13 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                                                 </div>
                                             ) : item.type === 'subtitle' ? (
                                                 <div className="flex flex-col gap-1">
-                                                    <div className="text-[10px] text-tertiary uppercase tracking-wider font-bold">{item.platform}</div>
-                                                    <div className="text-sm text-primary font-sans leading-relaxed">{item.text}</div>
+                                                    <div className="text-[10px] text-[#a1a1aa] uppercase tracking-wider font-medium">{item.platform}</div>
+                                                    <div className={`text-[13px] leading-[1.6] ${
+                                                        isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
+                                                    }`}>{item.text}</div>
                                                 </div>
                                             ) : (
-                                                <pre className="text-xs text-secondary whitespace-pre-wrap break-all">
+                                                <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
                                                     {JSON.stringify(item, null, 2)}
                                                 </pre>
                                             )}
@@ -261,28 +292,22 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                                 })}
                             </div>
                         ) : Array.isArray(data) && data.length > 0 && searchTerm ? (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2 p-4">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="11" cy="11" r="8" />
-                                    <path d="m21 21-4.35-4.35" />
-                                </svg>
-                                <span className="text-xs">未找到匹配的字幕</span>
+                            <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
+                                <SearchX size={20} strokeWidth={1.5} className="text-[#d4d4d8]" />
+                                <span className="text-[13px] text-[#a1a1aa]">未找到匹配的字幕</span>
                             </div>
                         ) : data ? (
                             <div className="p-4">
-                                <pre className="text-xs text-secondary whitespace-pre-wrap break-all">
+                                <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
                                     {JSON.stringify(data, null, 2)}
                                 </pre>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-tertiary gap-2">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-20">
-                                    <path d="M7 8h10M7 12h4M7 16h10" />
-                                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                                </svg>
+                            <div className="h-full flex flex-col items-center justify-center gap-3">
+                                <FileX size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
                                 <div className="text-center">
-                                    <div className="text-sm font-medium mb-1">等待字幕数据</div>
-                                    <div className="text-xs text-gray-400">点击左侧插件提取字幕</div>
+                                    <div className="text-[13px] font-medium text-[#71717a] mb-1">等待字幕数据</div>
+                                    <div className="text-[12px] text-[#a1a1aa]">点击左侧插件提取字幕</div>
                                 </div>
                             </div>
                         )}
