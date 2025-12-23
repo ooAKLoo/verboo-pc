@@ -52,6 +52,7 @@ const CHROME_USER_AGENT = getChromeUserAgent();
 export interface BrowserViewHandle {
     executeScript: (script: string) => Promise<any>;
     getCurrentUrl: () => string;
+    captureVideoFrame: () => Promise<any>;
 }
 
 interface BrowserViewProps {
@@ -60,10 +61,11 @@ interface BrowserViewProps {
     isActive: boolean;
     onData?: (data: any, tabId: string) => void;
     onTitleChange?: (title: string, tabId: string) => void;
+    onUrlChange?: (url: string, tabId: string) => void;
 }
 
 export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>(
-    ({ tabId, initialUrl, isActive, onData, onTitleChange }, ref) => {
+    ({ tabId, initialUrl, isActive, onData, onTitleChange, onUrlChange }, ref) => {
         const [url, setUrl] = useState(initialUrl);
         const [inputUrl, setInputUrl] = useState(initialUrl);
         const [isLoading, setIsLoading] = useState(false);
@@ -91,6 +93,37 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
             },
             getCurrentUrl: () => {
                 return url; // Return the current URL
+            },
+            captureVideoFrame: async () => {
+                return new Promise((resolve, reject) => {
+                    if (!webviewRef.current) {
+                        reject({ error: 'Webview not available' });
+                        return;
+                    }
+
+                    // Set up one-time listener for the result
+                    const handleResult = (event: any) => {
+                        if (event.channel === 'video-capture-result') {
+                            const result = event.args[0];
+                            if (result.error) {
+                                reject(result);
+                            } else {
+                                resolve(result);
+                            }
+                        }
+                    };
+
+                    webviewRef.current.addEventListener('ipc-message', handleResult);
+
+                    // Send capture command
+                    webviewRef.current.send('execute-video-capture');
+
+                    // Clean up after 5 seconds timeout
+                    setTimeout(() => {
+                        webviewRef.current?.removeEventListener('ipc-message', handleResult);
+                        reject({ error: 'Capture timeout' });
+                    }, 5000);
+                });
             }
         }));
 
@@ -106,6 +139,10 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                 setInputUrl(e.url);
                 setCanGoBack(webview.canGoBack());
                 setCanGoForward(webview.canGoForward());
+                // Notify parent of URL change for auto-loading subtitles
+                if (onUrlChange) {
+                    onUrlChange(e.url, tabId);
+                }
             };
 
             // Also catch in-page navigations
@@ -113,6 +150,10 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                 setInputUrl(e.url);
                 setCanGoBack(webview.canGoBack());
                 setCanGoForward(webview.canGoForward());
+                // Notify parent of URL change for auto-loading subtitles
+                if (onUrlChange) {
+                    onUrlChange(e.url, tabId);
+                }
             };
 
             // Update tab title when page title changes
@@ -141,10 +182,21 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                     const result = event.args[0];
                     console.log('[BrowserView] Capture result received:', result);
                     if (result && !result.error) {
-                        // Send to main process to save
-                        ipcRenderer.invoke('save-material', result).then((response: any) => {
+                        // Transform to new save-content format
+                        const contentData = {
+                            platform: result.platform,
+                            title: result.title,
+                            url: result.originalUrl,
+                            author: result.author,
+                            content: result.content,
+                            tags: result.tags || [],
+                            images: result.images || [],
+                            capturedAt: result.capturedAt,
+                        };
+                        // Send to main process to save using new API
+                        ipcRenderer.invoke('save-content', contentData).then((response: any) => {
                             if (response.success) {
-                                console.log('[BrowserView] Material saved:', response.data.id);
+                                console.log('[BrowserView] Content saved:', response.data.id);
                                 // Notify parent to refresh materials
                                 if (onData) {
                                     onData({ type: 'material-saved', data: response.data }, tabId);
@@ -184,7 +236,7 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                 webview.removeEventListener('page-title-updated', handlePageTitleUpdated);
                 webview.removeEventListener('ipc-message', handleIpcMessage);
             };
-        }, [onData, isActive, tabId]);
+        }, [onData, onUrlChange, isActive, tabId]);
 
         const handleNavigate = (e: React.FormEvent) => {
             e.preventDefault();
@@ -249,7 +301,7 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                         className="w-full h-full rounded-none shadow-inner bg-white"
                         preload={`file://${preloadPath}`}
                         useragent={CHROME_USER_AGENT}
-                        allowpopups={"true"}
+                        allowpopups={true}
                         partition="persist:webview"
                         webpreferences="contextIsolation=no, nodeIntegration=yes, enableRemoteModule=no, javascript=yes, plugins=yes, webSecurity=yes"
                     />

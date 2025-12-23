@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { MaterialPanel } from './MaterialPanel';
+import { AssetPanel } from './AssetPanel';
+import type { Asset } from './AssetCard';
 import { FileText, Package, SearchX, FileX } from 'lucide-react';
 
 interface InfoPanelProps {
     data: any;
     currentVideoTime?: number;
     materialRefreshTrigger?: number;
-    onOpenLink?: (url: string) => void;
+    onEditScreenshot?: (asset: Asset) => void;
 }
 
-type TabType = 'subtitles' | 'materials';
+type TabType = 'subtitles' | 'assets';
 
-export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onOpenLink }: InfoPanelProps) {
+export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot }: InfoPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('subtitles');
     const [searchTerm, setSearchTerm] = useState('');
     const [autoScroll, setAutoScroll] = useState(true);
@@ -119,7 +120,7 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
 
     const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
         { id: 'subtitles', label: '字幕', icon: FileText },
-        { id: 'materials', label: '素材', icon: Package },
+        { id: 'assets', label: '素材库', icon: Package },
     ];
 
     return (
@@ -131,8 +132,8 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                     <div
                         className="absolute top-0.5 bottom-0.5 rounded-md bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-200 ease-out"
                         style={{
-                            width: `calc(50% - 2px)`,
-                            left: activeTab === 'subtitles' ? '2px' : 'calc(50% + 0px)',
+                            width: `calc(${100 / tabs.length}% - 2px)`,
+                            left: activeTab === 'subtitles' ? '2px' : `calc(${100 / tabs.length}% - 0px)`,
                         }}
                     />
                     {tabs.map((tab) => (
@@ -152,11 +153,11 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                 </div>
             </div>
 
-            {/* Materials Tab */}
-            {activeTab === 'materials' && (
-                <MaterialPanel
+            {/* Assets Tab */}
+            {activeTab === 'assets' && (
+                <AssetPanel
                     refreshTrigger={materialRefreshTrigger}
-                    onOpenLink={onOpenLink}
+                    onEditScreenshot={onEditScreenshot}
                 />
             )}
 
@@ -317,4 +318,3 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
         </div>
     );
 }
-

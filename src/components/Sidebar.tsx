@@ -1,9 +1,10 @@
 interface SidebarProps {
     onRunPlugin: (script: string) => void;
     onOpenSubtitleDialog: () => void;
+    onCaptureScreenshot: () => void;
 }
 
-export function Sidebar({ onRunPlugin, onOpenSubtitleDialog }: SidebarProps) {
+export function Sidebar({ onRunPlugin, onOpenSubtitleDialog, onCaptureScreenshot }: SidebarProps) {
     return (
         <div className="h-full flex flex-col py-4 font-sans bg-white">
             {/* Header */}
@@ -36,6 +37,14 @@ export function Sidebar({ onRunPlugin, onOpenSubtitleDialog }: SidebarProps) {
                 >
                     <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
                     <span className="text-[11px] text-[#a1a1aa] mt-0.5">自动获取或手动导入</span>
+                </div>
+
+                <div
+                    onClick={onCaptureScreenshot}
+                    className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                >
+                    <span className="text-[13px] font-medium text-[#18181b]">视频截图</span>
+                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">捕获当前画面和字幕</span>
                 </div>
             </div>
         </div>

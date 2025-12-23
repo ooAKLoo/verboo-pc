@@ -1,11 +1,22 @@
+/**
+ * Webview Preload Script
+ *
+ * This script runs in the webview context and provides:
+ * - Anti-detection measures to avoid bot detection
+ * - Platform adapter system for content/video capture
+ * - IPC communication with the main process
+ */
 
 import { ipcRenderer } from 'electron';
+import { adapterRegistry, genericAdapter } from './adapters';
+import type { PlatformAdapter, VideoCaptureResult } from './adapters';
 
 declare global {
     interface Window {
         verboo: {
             sendData: (data: any) => void;
             captureContent: () => Promise<any>;
+            captureVideoFrame: () => Promise<any>;
         };
         trustedTypes?: {
             createPolicy: (name: string, rules: any) => any;
@@ -13,8 +24,8 @@ declare global {
     }
 }
 
-// ============ Anti-Detection: Override navigator properties ============
-// This must run before any page scripts to prevent Electron detection
+// ============ Anti-Detection Measures ============
+// Must run before any page scripts to prevent Electron detection
 
 (function hideElectronFingerprints() {
     // Remove webdriver property (used to detect automation)
@@ -31,7 +42,7 @@ declare global {
                 { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
                 { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
             ];
-            const pluginArray = plugins.map((p, i) => {
+            const pluginArray = plugins.map((p) => {
                 const plugin = {
                     ...p,
                     length: 1,
@@ -55,8 +66,7 @@ declare global {
         configurable: true
     });
 
-    // Override platform if needed (already looks normal in most cases)
-    // Prevent chrome.runtime detection which is undefined in Electron
+    // Prevent chrome.runtime detection
     if (!(window as any).chrome) {
         (window as any).chrome = {};
     }
@@ -64,11 +74,10 @@ declare global {
         (window as any).chrome.runtime = {};
     }
 
-    // Override permissions API to appear normal
+    // Override permissions API
     if (navigator.permissions) {
         const originalQuery = navigator.permissions.query.bind(navigator.permissions);
         navigator.permissions.query = (parameters: any) => {
-            // Return granted for notifications to avoid detection
             if (parameters.name === 'notifications') {
                 return Promise.resolve({ state: 'prompt', onchange: null } as PermissionStatus);
             }
@@ -76,16 +85,16 @@ declare global {
         };
     }
 
-    // Hide Electron-specific process object from window
+    // Hide Electron process object
     try {
         if ((window as any).process) {
             delete (window as any).process;
         }
     } catch (e) {
-        // Ignore if not deletable
+        // Ignore
     }
 
-    // Override user agent in navigator (backup, main one is set via webview attribute)
+    // Override user agent
     const chromeVersion = '120.0.0.0';
     const platform = navigator.platform;
     let userAgent: string;
@@ -103,36 +112,24 @@ declare global {
         configurable: true
     });
 
-    // Override appVersion to match
     Object.defineProperty(navigator, 'appVersion', {
         get: () => userAgent.replace('Mozilla/', ''),
         configurable: true
     });
 
-    // Add WebGL vendor and renderer to appear as normal browser
+    // WebGL fingerprinting protection
     const getParameterProto = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function (parameter: number) {
-        // UNMASKED_VENDOR_WEBGL
-        if (parameter === 37445) {
-            return 'Google Inc. (Apple)';
-        }
-        // UNMASKED_RENDERER_WEBGL
-        if (parameter === 37446) {
-            return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
-        }
+        if (parameter === 37445) return 'Google Inc. (Apple)';
+        if (parameter === 37446) return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
         return getParameterProto.call(this, parameter);
     };
 
-    // Same for WebGL2
     if (typeof WebGL2RenderingContext !== 'undefined') {
         const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
         WebGL2RenderingContext.prototype.getParameter = function (parameter: number) {
-            if (parameter === 37445) {
-                return 'Google Inc. (Apple)';
-            }
-            if (parameter === 37446) {
-                return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
-            }
+            if (parameter === 37445) return 'Google Inc. (Apple)';
+            if (parameter === 37446) return 'ANGLE (Apple, Apple M1, OpenGL 4.1)';
             return getParameterProto2.call(this, parameter);
         };
     }
@@ -140,172 +137,134 @@ declare global {
     console.log('[Verboo] Anti-detection measures applied');
 })();
 
-// Platform detection patterns
-const PLATFORM_PATTERNS = [
-    { name: '小红书', patterns: ['xiaohongshu.com', 'xhslink.com', 'xhs.cn'] },
-    { name: 'Twitter', patterns: ['twitter.com', 'x.com'] },
-    { name: 'TikTok', patterns: ['tiktok.com'] },
-    { name: 'Reddit', patterns: ['reddit.com'] },
-];
+// ============ Adapter Helper Functions ============
 
 /**
- * Check if current URL matches a supported platform
+ * Get the adapter for current page (or generic fallback)
  */
-function getMatchedPlatform(): string | null {
+function getCurrentAdapter(): PlatformAdapter {
     const url = window.location.href;
-    for (const platform of PLATFORM_PATTERNS) {
-        if (platform.patterns.some(p => url.includes(p))) {
-            return platform.name;
-        }
+    const adapter = adapterRegistry.getAdapterForUrl(url);
+    if (adapter) {
+        return adapter;
     }
-    return null;
+    // Use generic adapter as fallback
+    genericAdapter.match(url);
+    return genericAdapter;
 }
 
 /**
- * Capture script for XHS (小红书)
+ * Check if current page supports content capture
  */
-function captureXHS() {
-    try {
-        const result: any = {
-            title: '',
-            content: '',
-            images: [],
-            author: { name: '', avatar: '', profileUrl: '' },
-            tags: []
-        };
-
-        // Extract title
-        const titleEl = document.querySelector('#detail-title')
-            || document.querySelector('.title')
-            || document.querySelector('[class*="title"]');
-        if (titleEl) {
-            result.title = (titleEl as HTMLElement).textContent?.trim() || '';
-        }
-
-        // Extract content
-        const contentEl = document.querySelector('#detail-desc')
-            || document.querySelector('.desc')
-            || document.querySelector('[class*="content"]')
-            || document.querySelector('.note-text');
-        if (contentEl) {
-            result.content = (contentEl as HTMLElement).textContent?.trim() || '';
-        }
-
-        // Extract images
-        const imageEls = document.querySelectorAll('.swiper-slide img, .carousel img, [class*="image"] img');
-        if (imageEls.length > 0) {
-            imageEls.forEach(img => {
-                const src = (img as HTMLImageElement).src || (img as any).dataset.src;
-                if (src && !result.images.includes(src)) {
-                    result.images.push(src);
-                }
-            });
-        }
-
-        // Fallback images
-        if (result.images.length === 0) {
-            document.querySelectorAll('img[src*="xhscdn"], img[src*="xiaohongshu"]').forEach(img => {
-                const src = (img as HTMLImageElement).src;
-                if (src && src.includes('http') && !result.images.includes(src)) {
-                    result.images.push(src);
-                }
-            });
-        }
-
-        // Extract author
-        const authorNameEl = document.querySelector('.author-wrapper .name')
-            || document.querySelector('[class*="nickname"]')
-            || document.querySelector('.user-name');
-        if (authorNameEl) {
-            result.author.name = (authorNameEl as HTMLElement).textContent?.trim() || '';
-        }
-
-        const authorAvatarEl = document.querySelector('.author-wrapper img')
-            || document.querySelector('[class*="avatar"] img');
-        if (authorAvatarEl) {
-            result.author.avatar = (authorAvatarEl as HTMLImageElement).src || '';
-        }
-
-        const authorLinkEl = document.querySelector('.author-wrapper a')
-            || document.querySelector('[class*="user"] a');
-        if (authorLinkEl) {
-            result.author.profileUrl = (authorLinkEl as HTMLAnchorElement).href || '';
-        }
-
-        // Extract tags
-        document.querySelectorAll('[class*="tag"] a, .hashtag, [id*="hash-tag"]').forEach(tag => {
-            const tagText = (tag as HTMLElement).textContent?.trim().replace(/^#/, '');
-            if (tagText && !result.tags.includes(tagText)) {
-                result.tags.push(tagText);
-            }
-        });
-
-        // Extract hashtags from content
-        const hashtagRegex = /#([^#\s]+)/g;
-        let match;
-        while ((match = hashtagRegex.exec(result.content)) !== null) {
-            const tag = match[1].trim();
-            if (tag && !result.tags.includes(tag)) {
-                result.tags.push(tag);
-            }
-        }
-
-        return result;
-    } catch (error) {
-        return { error: (error as Error).message };
-    }
+function canCaptureContent(): boolean {
+    const adapter = getCurrentAdapter();
+    return adapter.capabilities.canCaptureContent;
 }
 
 /**
- * Capture content based on current platform
+ * Capture content from current page using adapter
  */
-function captureContent() {
-    const platform = getMatchedPlatform();
-    if (!platform) {
-        return { error: 'Unsupported platform' };
+function captureContent(): any {
+    const adapter = getCurrentAdapter();
+
+    if (!adapter.capabilities.canCaptureContent) {
+        return { error: 'Content capture not supported for this platform' };
     }
 
-    let rawData: any;
-    switch (platform) {
-        case '小红书':
-            rawData = captureXHS();
-            break;
-        // Future platforms can be added here
-        default:
-            return { error: 'Capture not implemented for this platform' };
-    }
-
-    if (rawData.error) {
-        return rawData;
+    const result = adapter.captureContent();
+    if (!result) {
+        return { error: 'Failed to capture content' };
     }
 
     return {
-        platform,
-        title: rawData.title,
-        content: rawData.content,
-        images: rawData.images,
-        author: rawData.author,
-        tags: rawData.tags,
-        originalUrl: window.location.href,
-        capturedAt: new Date().toISOString()
+        platform: adapter.platform.name,
+        ...result
     };
 }
 
-// Expose a safe API to the guest page - must run before page scripts
+/**
+ * Capture video frame from current page using adapter
+ */
+function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
+    return new Promise((resolve, reject) => {
+        try {
+            const adapter = getCurrentAdapter();
+            const platformInfo = 'getPlatformInfo' in adapter
+                ? (adapter as any).getPlatformInfo()
+                : adapter.platform;
+
+            // Find video element
+            const videoElement = adapter.findVideoElement();
+            if (!videoElement) {
+                return reject({ error: '未找到视频元素' });
+            }
+
+            // Check video readiness
+            if (videoElement.readyState < 2) {
+                return reject({ error: '视频尚未加载，请等待视频加载后再试' });
+            }
+
+            if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+                return reject({ error: '视频尚未就绪，请稍后再试' });
+            }
+
+            // Create canvas and capture frame
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return reject({ error: 'Canvas context creation failed' });
+            }
+
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/png');
+
+            // Get video title
+            const videoTitle = adapter.getVideoTitle() || document.title;
+
+            // Get author info
+            const author = adapter.getAuthorInfo() || { name: '' };
+
+            resolve({
+                imageData,
+                timestamp: videoElement.currentTime,
+                duration: videoElement.duration,
+                videoUrl: window.location.href,
+                videoTitle,
+                width: canvas.width,
+                height: canvas.height,
+                author,
+                // Include platform info
+                platform: platformInfo.id,
+                favicon: platformInfo.favicon
+            } as VideoCaptureResult & { platform: string; favicon: string });
+        } catch (error) {
+            reject({ error: (error as Error).message });
+        }
+    });
+}
+
+// ============ Expose API to Guest Page ============
+
 (function () {
-    console.log('Verboo: webview-preload.js loaded');
+    console.log('[Verboo] webview-preload.js loaded');
 
     window.verboo = {
         sendData: (data: any) => {
-            console.log('Verboo: Sending data to host', data);
+            console.log('[Verboo] Sending data to host', data);
             ipcRenderer.sendToHost('plugin-data', data);
         },
         captureContent: async () => {
             return captureContent();
+        },
+        captureVideoFrame: async () => {
+            return captureVideoFrame();
         }
     };
 
-    // Also make it available as early as possible
+    // Freeze the API
     Object.defineProperty(window, 'verboo', {
         value: window.verboo,
         writable: false,
@@ -314,71 +273,64 @@ function captureContent() {
 
     // ============ Context Menu Handler ============
     document.addEventListener('contextmenu', (e) => {
-        const platform = getMatchedPlatform();
-        console.log('[Verboo] Context menu triggered, platform:', platform);
+        const canCapture = canCaptureContent();
+        const adapter = getCurrentAdapter();
+        console.log('[Verboo] Context menu triggered, platform:', adapter.platform.name);
 
-        // Send message to host to show custom menu
         ipcRenderer.sendToHost('show-context-menu', {
             x: e.clientX,
             y: e.clientY,
-            canCapture: platform !== null,
-            platform: platform
+            canCapture,
+            platform: adapter.platform.name
         });
     });
 
-    // Listen for capture command from main process
+    // ============ IPC Command Handlers ============
+
+    // Content capture command
     ipcRenderer.on('execute-capture', () => {
         console.log('[Verboo] Capture command received');
         const result = captureContent();
         ipcRenderer.sendToHost('capture-result', result);
     });
 
-    // Monitor video playback time
+    // Video frame capture command
+    ipcRenderer.on('execute-video-capture', async () => {
+        console.log('[Verboo] Video capture command received');
+        try {
+            const result = await captureVideoFrame();
+            ipcRenderer.sendToHost('video-capture-result', result);
+        } catch (error: any) {
+            ipcRenderer.sendToHost('video-capture-result', { error: error.error || error.message });
+        }
+    });
+
+    // ============ Video Time Monitoring ============
     let videoTimeInterval: NodeJS.Timeout | null = null;
 
     function startVideoTimeMonitoring() {
-        if (videoTimeInterval) return; // Already monitoring
+        if (videoTimeInterval) return;
 
         videoTimeInterval = setInterval(() => {
-            // Try to find video element
-            let videoElement: HTMLVideoElement | null = null;
-            let currentTime = 0;
+            const adapter = getCurrentAdapter();
+            const videoElement = adapter.findVideoElement();
 
-            // YouTube
-            const youtubeVideo = document.querySelector('video.html5-main-video') as HTMLVideoElement;
-            if (youtubeVideo && !youtubeVideo.paused) {
-                videoElement = youtubeVideo;
-                currentTime = youtubeVideo.currentTime;
-            }
-
-            // Bilibili
-            if (!videoElement) {
-                const bilibiliVideo = document.querySelector('video') as HTMLVideoElement;
-                if (bilibiliVideo && !bilibiliVideo.paused) {
-                    videoElement = bilibiliVideo;
-                    currentTime = bilibiliVideo.currentTime;
-                }
-            }
-
-            // Send time update if video is playing
-            if (videoElement && currentTime > 0) {
+            if (videoElement && !videoElement.paused && videoElement.currentTime > 0) {
                 ipcRenderer.sendToHost('video-time-update', {
-                    currentTime,
+                    currentTime: videoElement.currentTime,
                     duration: videoElement.duration,
                     paused: videoElement.paused
                 });
             }
-        }, 500); // Check every 500ms
+        }, 500);
     }
 
     // Start monitoring after page loads
     window.addEventListener('DOMContentLoaded', () => {
-        setTimeout(startVideoTimeMonitoring, 1000); // Wait 1s for video to load
+        setTimeout(startVideoTimeMonitoring, 1000);
     });
 
-    // Also try immediately if DOM is already loaded
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         setTimeout(startVideoTimeMonitoring, 1000);
     }
 })();
-

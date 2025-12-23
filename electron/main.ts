@@ -4,11 +4,23 @@ import { getYouTubeSubtitles } from './youtube-service';
 import {
     initDatabase,
     closeDatabase,
-    saveMaterial,
-    getMaterials,
-    deleteMaterial,
-    searchMaterials,
-    getMaterialsCount
+    // Asset functions
+    saveContent,
+    saveScreenshot,
+    getAssets,
+    getAssetById,
+    updateAsset,
+    deleteAsset,
+    searchAssets,
+    getAssetsCount,
+    // Subtitle functions
+    saveSubtitles,
+    getSubtitlesByUrl,
+    getSubtitlesById,
+    getAllSubtitles,
+    deleteSubtitles,
+    // Types
+    type AssetType
 } from './database';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -107,6 +119,8 @@ app.whenReady().then(() => {
  * Setup IPC handlers for communication with renderer
  */
 function setupIpcHandlers() {
+    console.log('[Main] Setting up IPC handlers...');
+
     // Handle YouTube subtitle extraction
     ipcMain.handle('get-youtube-subtitles', async (event, url: string) => {
         try {
@@ -129,62 +143,188 @@ function setupIpcHandlers() {
         return { success: true };
     });
 
-    // ============ Material CRUD IPC Handlers ============
+    // ============ Unified Asset IPC Handlers ============
 
-    // Save a material
-    ipcMain.handle('save-material', async (event, materialData) => {
+    // Save content asset
+    ipcMain.handle('save-content', async (event, data) => {
         try {
-            console.log('[IPC] save-material called:', materialData.platform);
-            const material = saveMaterial({
-                platform: materialData.platform,
-                title: materialData.title || '',
-                content: materialData.content || '',
-                author: materialData.author || { name: '' },
-                tags: materialData.tags || [],
-                images: materialData.images || [],
-                originalUrl: materialData.originalUrl,
-                capturedAt: new Date(materialData.capturedAt || Date.now()),
+            console.log('[IPC] save-content called:', data.platform);
+            const asset = saveContent({
+                platform: data.platform,
+                title: data.title || '',
+                url: data.url,
+                author: data.author,
+                favicon: data.favicon,
+                thumbnail: data.thumbnail,
+                content: data.content || '',
+                tags: data.tags || [],
+                images: data.images || [],
+                capturedAt: data.capturedAt ? new Date(data.capturedAt) : undefined,
             });
-            return { success: true, data: material };
+            return { success: true, data: asset };
         } catch (error) {
-            console.error('[IPC] save-material failed:', error);
+            console.error('[IPC] save-content failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });
 
-    // Get all materials (with pagination)
-    ipcMain.handle('get-materials', async (event, options?: { limit?: number; offset?: number; platform?: string }) => {
+    // Save screenshot asset
+    ipcMain.handle('save-screenshot', async (event, data) => {
         try {
-            const materials = getMaterials(options || {});
-            const count = getMaterialsCount(options?.platform);
-            return { success: true, data: materials, total: count };
+            console.log('[IPC] save-screenshot called');
+            const asset = saveScreenshot({
+                platform: data.platform,
+                title: data.title || data.videoTitle || '',
+                url: data.url || data.videoUrl,
+                author: data.author,
+                favicon: data.favicon,
+                timestamp: data.timestamp,
+                imageData: data.imageData,
+                finalImageData: data.finalImageData,
+                selectedSubtitles: data.subtitles || data.selectedSubtitles,
+                subtitleStyle: data.subtitleStyle,
+                subtitleId: data.subtitleId,
+            });
+            return { success: true, data: asset };
         } catch (error) {
-            console.error('[IPC] get-materials failed:', error);
+            console.error('[IPC] save-screenshot failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });
 
-    // Delete a material
-    ipcMain.handle('delete-material', async (event, id: number) => {
+    // Get assets (unified query)
+    ipcMain.handle('get-assets', async (event, options?: {
+        type?: AssetType;
+        platform?: string;
+        limit?: number;
+        offset?: number;
+    }) => {
         try {
-            const deleted = deleteMaterial(id);
+            const assets = getAssets(options || {});
+            const count = getAssetsCount({ type: options?.type, platform: options?.platform });
+            return { success: true, data: assets, total: count };
+        } catch (error) {
+            console.error('[IPC] get-assets failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get single asset by ID
+    ipcMain.handle('get-asset', async (event, id: number) => {
+        try {
+            const asset = getAssetById(id);
+            return { success: true, data: asset };
+        } catch (error) {
+            console.error('[IPC] get-asset failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Update asset
+    ipcMain.handle('update-asset', async (event, data: { id: number; title?: string; typeData?: any }) => {
+        try {
+            const { id, ...updateData } = data;
+            console.log('[IPC] update-asset called for ID:', id);
+            const asset = updateAsset(id, updateData);
+            if (asset) {
+                return { success: true, data: asset };
+            } else {
+                return { success: false, error: 'Asset not found' };
+            }
+        } catch (error) {
+            console.error('[IPC] update-asset failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Delete asset
+    ipcMain.handle('delete-asset', async (event, id: number) => {
+        try {
+            const deleted = deleteAsset(id);
             return { success: deleted };
         } catch (error) {
-            console.error('[IPC] delete-material failed:', error);
+            console.error('[IPC] delete-asset failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });
 
-    // Search materials
-    ipcMain.handle('search-materials', async (event, keyword: string, limit?: number) => {
+    // Search assets
+    ipcMain.handle('search-assets', async (event, keyword: string, options?: { type?: AssetType; limit?: number }) => {
         try {
-            const materials = searchMaterials(keyword, limit);
-            return { success: true, data: materials };
+            const assets = searchAssets(keyword, options);
+            return { success: true, data: assets };
         } catch (error) {
-            console.error('[IPC] search-materials failed:', error);
+            console.error('[IPC] search-assets failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });
+
+    console.log('[Main] Asset IPC handlers registered successfully');
+
+    // ============ Subtitle IPC Handlers ============
+
+    // Save subtitles (upsert)
+    ipcMain.handle('save-subtitles', async (event, subtitleData) => {
+        try {
+            console.log('[IPC] save-subtitles called for URL:', subtitleData.videoUrl);
+            const subtitle = saveSubtitles({
+                videoUrl: subtitleData.videoUrl,
+                videoTitle: subtitleData.videoTitle || '',
+                platform: subtitleData.platform || '',
+                subtitleData: subtitleData.subtitleData || []
+            });
+            return { success: true, data: subtitle };
+        } catch (error) {
+            console.error('[IPC] save-subtitles failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get subtitles by URL
+    ipcMain.handle('get-subtitles-by-url', async (event, videoUrl: string) => {
+        try {
+            const subtitle = getSubtitlesByUrl(videoUrl);
+            return { success: true, data: subtitle };
+        } catch (error) {
+            console.error('[IPC] get-subtitles-by-url failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get subtitles by ID
+    ipcMain.handle('get-subtitles-by-id', async (event, id: number) => {
+        try {
+            const subtitle = getSubtitlesById(id);
+            return { success: true, data: subtitle };
+        } catch (error) {
+            console.error('[IPC] get-subtitles-by-id failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get all subtitles
+    ipcMain.handle('get-all-subtitles', async (event, options?: { limit?: number; offset?: number }) => {
+        try {
+            const subtitles = getAllSubtitles(options || {});
+            return { success: true, data: subtitles };
+        } catch (error) {
+            console.error('[IPC] get-all-subtitles failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Delete subtitles
+    ipcMain.handle('delete-subtitles', async (event, id: number) => {
+        try {
+            const deleted = deleteSubtitles(id);
+            return { success: deleted };
+        } catch (error) {
+            console.error('[IPC] delete-subtitles failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    console.log('[Main] Subtitle IPC handlers registered successfully');
 
     // ============ Context Menu Handler ============
 

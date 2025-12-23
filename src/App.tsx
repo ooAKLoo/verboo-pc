@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { BrowserView } from './components/BrowserView';
@@ -6,13 +6,30 @@ import type { BrowserViewHandle } from './components/BrowserView';
 import { InfoPanel } from './components/InfoPanel';
 import { TabBar, type Tab } from './components/TabBar';
 import { SubtitleDialog } from './components/SubtitleDialog';
+import { ScreenshotDialog } from './components/ScreenshotDialog';
+import type { ScreenshotSaveData } from './components/ScreenshotDialog';
+import { Toast } from './components/Toast';
 import type { SubtitleItem } from './utils/subtitleParser';
+import type { Asset, ScreenshotTypeData } from './components/AssetCard';
 import { PanelLeft, PanelRight } from 'lucide-react';
+
+interface ToastState {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'screenshot';
+}
 
 function App() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
+
+  // Screenshot editing mode (for post-processing)
+  const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
+  const [editingScreenshot, setEditingScreenshot] = useState<any>(null);
+
+  // Toast state
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   // Tab management
   const [tabs, setTabs] = useState<Tab[]>([{
@@ -22,13 +39,70 @@ function App() {
   }]);
   const [activeTabId, setActiveTabId] = useState('tab-1');
 
-  // Per-tab data
+  // Per-tab data: subtitles and current URL
   const [tabData, setTabData] = useState<{ [tabId: string]: any }>({});
   const [tabVideoTime, setTabVideoTime] = useState<{ [tabId: string]: number }>({});
+  const [tabUrls, setTabUrls] = useState<{ [tabId: string]: string }>({});
   const [materialRefreshTrigger, setMaterialRefreshTrigger] = useState(0);
+
+  // Track last loaded URL to avoid duplicate loads
+  const lastLoadedUrlRef = useRef<{ [tabId: string]: string }>({});
 
   const browserRef = React.useRef<BrowserViewHandle>(null);
   const { ipcRenderer } = window.require('electron');
+
+  // Show toast notification
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success') => {
+    setToast({
+      id: Date.now().toString(),
+      message,
+      type
+    });
+  }, []);
+
+  const hideToast = useCallback(() => {
+    setToast(null);
+  }, []);
+
+  // Auto-load subtitles when URL changes
+  useEffect(() => {
+    const currentUrl = tabUrls[activeTabId];
+    if (!currentUrl) return;
+
+    // Skip if already loaded for this URL
+    if (lastLoadedUrlRef.current[activeTabId] === currentUrl) return;
+
+    // Only auto-load for video pages
+    const isVideoPage = currentUrl.includes('youtube.com/watch') ||
+                        currentUrl.includes('bilibili.com/video');
+    if (!isVideoPage) return;
+
+    // Check if we already have subtitles loaded in memory
+    const existingData = tabData[activeTabId];
+    if (Array.isArray(existingData) && existingData.length > 0) {
+      lastLoadedUrlRef.current[activeTabId] = currentUrl;
+      return;
+    }
+
+    // Try to load from database
+    const loadSubtitles = async () => {
+      try {
+        const response = await ipcRenderer.invoke('get-subtitles-by-url', currentUrl);
+        if (response.success && response.data && response.data.subtitleData) {
+          console.log('[App] Auto-loaded subtitles for:', currentUrl);
+          setTabData(prev => ({
+            ...prev,
+            [activeTabId]: response.data.subtitleData
+          }));
+          lastLoadedUrlRef.current[activeTabId] = currentUrl;
+        }
+      } catch (error) {
+        console.error('[App] Failed to auto-load subtitles:', error);
+      }
+    };
+
+    loadSubtitles();
+  }, [tabUrls, activeTabId, ipcRenderer]);
 
   // Tab management functions
   const handleNewTab = () => {
@@ -43,20 +117,29 @@ function App() {
   };
 
   const handleCloseTab = (tabId: string) => {
-    if (tabs.length === 1) return; // Keep at least one tab
+    if (tabs.length === 1) return;
 
     const newTabs = tabs.filter(t => t.id !== tabId);
     setTabs(newTabs);
 
     // Clean up tab data
-    const newTabData = { ...tabData };
-    const newTabVideoTime = { ...tabVideoTime };
-    delete newTabData[tabId];
-    delete newTabVideoTime[tabId];
-    setTabData(newTabData);
-    setTabVideoTime(newTabVideoTime);
+    setTabData(prev => {
+      const newData = { ...prev };
+      delete newData[tabId];
+      return newData;
+    });
+    setTabVideoTime(prev => {
+      const newData = { ...prev };
+      delete newData[tabId];
+      return newData;
+    });
+    setTabUrls(prev => {
+      const newData = { ...prev };
+      delete newData[tabId];
+      return newData;
+    });
+    delete lastLoadedUrlRef.current[tabId];
 
-    // Switch to another tab if closing active tab
     if (activeTabId === tabId) {
       setActiveTabId(newTabs[newTabs.length - 1].id);
     }
@@ -72,22 +155,29 @@ function App() {
     ));
   };
 
+  // Handle URL changes from BrowserView
+  const handleUrlChange = (url: string, tabId: string) => {
+    setTabUrls(prev => ({
+      ...prev,
+      [tabId]: url
+    }));
+  };
 
   const handleRunPlugin = async (script: string) => {
     if (browserRef.current) {
       try {
         const result = await browserRef.current.executeScript(script);
-        setTabData({
-          ...tabData,
+        setTabData(prev => ({
+          ...prev,
           [activeTabId]: result
-        });
-        if (rightCollapsed) setRightCollapsed(false); // Auto-open info panel
+        }));
+        if (rightCollapsed) setRightCollapsed(false);
       } catch (error) {
         console.error("Plugin execution failed:", error);
-        setTabData({
-          ...tabData,
+        setTabData(prev => ({
+          ...prev,
           [activeTabId]: { error: String(error) }
-        });
+        }));
       }
     }
   };
@@ -96,7 +186,6 @@ function App() {
     if (!browserRef.current) return;
 
     try {
-      // Get current URL from webview
       const url = browserRef.current.getCurrentUrl();
 
       if (!url.includes('youtube.com/watch')) {
@@ -104,17 +193,22 @@ function App() {
       }
 
       console.log('Calling IPC to get subtitles for:', url);
-
-      // Call Electron main process via IPC
       const response = await ipcRenderer.invoke('get-youtube-subtitles', url);
 
       if (response.success) {
         console.log('Got subtitles:', response.data.length);
-        setTabData({
-          ...tabData,
+        setTabData(prev => ({
+          ...prev,
           [activeTabId]: response.data
-        });
+        }));
         if (rightCollapsed) setRightCollapsed(false);
+
+        // Save/update subtitles to database (upsert)
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        await saveSubtitlesToDatabase(url, activeTab?.title || '', 'youtube', response.data);
+
+        // Update last loaded URL
+        lastLoadedUrlRef.current[activeTabId] = url;
       } else {
         throw new Error(response.error || '获取失败');
       }
@@ -124,12 +218,171 @@ function App() {
     }
   };
 
-  const handleImportSubtitles = (subtitles: SubtitleItem[]) => {
-    setTabData({
-      ...tabData,
+  const handleImportSubtitles = async (subtitles: SubtitleItem[]) => {
+    setTabData(prev => ({
+      ...prev,
       [activeTabId]: subtitles
-    });
+    }));
     if (rightCollapsed) setRightCollapsed(false);
+
+    // Save/update imported subtitles (upsert)
+    const url = browserRef.current?.getCurrentUrl() || '';
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (url) {
+      await saveSubtitlesToDatabase(url, activeTab?.title || '', 'import', subtitles);
+      lastLoadedUrlRef.current[activeTabId] = url;
+    }
+  };
+
+  // Save subtitles to database (upsert by video_url)
+  const saveSubtitlesToDatabase = async (videoUrl: string, videoTitle: string, platform: string, subtitleData: SubtitleItem[]) => {
+    try {
+      const response = await ipcRenderer.invoke('save-subtitles', {
+        videoUrl,
+        videoTitle,
+        platform,
+        subtitleData
+      });
+      if (response.success) {
+        console.log('[App] Subtitles saved/updated:', response.data.id);
+      }
+    } catch (error) {
+      console.error('[App] Failed to save subtitles:', error);
+    }
+  };
+
+  // Quick capture - silent save with toast feedback
+  const handleCaptureScreenshot = async () => {
+    if (!browserRef.current) {
+      showToast('浏览器未就绪', 'error');
+      return;
+    }
+
+    try {
+      const result = await browserRef.current.captureVideoFrame();
+      const currentSubtitles = Array.isArray(tabData[activeTabId]) ? tabData[activeTabId] : [];
+
+      // Find matching subtitle for current timestamp
+      const matchingSubtitles = currentSubtitles.filter((sub: SubtitleItem) => {
+        const end = sub.start + (sub.duration || 0);
+        return result.timestamp >= sub.start && result.timestamp <= end;
+      });
+
+      // Prepare save data - no subtitleId needed, use videoUrl for association
+      const saveData: ScreenshotSaveData = {
+        videoUrl: result.videoUrl,
+        videoTitle: result.videoTitle,
+        timestamp: result.timestamp,
+        imageData: result.imageData,
+        // Platform and author info
+        platform: result.platform,
+        favicon: result.favicon,
+        author: result.author,
+        subtitles: matchingSubtitles.length > 0
+          ? matchingSubtitles.map((sub: SubtitleItem) => ({
+              start: sub.start,
+              end: sub.start + (sub.duration || 0),
+              text: sub.text
+            }))
+          : undefined,
+        subtitleStyle: matchingSubtitles.length > 0
+          ? { position: 'bottom', background: 'semi-transparent', fontSize: 28, layout: 'vertical' }
+          : undefined
+      };
+
+      // Save screenshot silently
+      const response = await ipcRenderer.invoke('save-screenshot', saveData);
+
+      if (response.success) {
+        console.log('[App] Screenshot saved:', response.data.id);
+        setMaterialRefreshTrigger(prev => prev + 1);
+        showToast('已保存到截图库', 'screenshot');
+      } else {
+        throw new Error(response.error || '保存失败');
+      }
+    } catch (error: any) {
+      console.error('[App] Screenshot failed:', error);
+      showToast(error.error || error.message || '截图失败', 'error');
+    }
+  };
+
+  // Open screenshot editor for post-processing
+  // Load latest subtitles by videoUrl when editing
+  // Now handles both old Screenshot type and new Asset type
+  const handleEditScreenshot = async (asset: Asset) => {
+    try {
+      // Extract data from the new Asset format
+      const typeData = asset.typeData as ScreenshotTypeData;
+      const videoUrl = asset.url;
+
+      // Always fetch latest subtitles by videoUrl
+      let subtitles: SubtitleItem[] = [];
+      const response = await ipcRenderer.invoke('get-subtitles-by-url', videoUrl);
+      if (response.success && response.data && response.data.subtitleData) {
+        subtitles = response.data.subtitleData;
+        console.log('[App] Loaded latest subtitles for editing:', subtitles.length);
+      }
+
+      // Transform Asset to ScreenshotDialog format
+      setEditingScreenshot({
+        id: asset.id,
+        imageData: typeData.imageData,
+        timestamp: typeData.timestamp,
+        duration: 0,
+        videoUrl: asset.url,
+        videoTitle: asset.title,
+        width: 0,
+        height: 0,
+        subtitles
+      });
+      setIsScreenshotEditorOpen(true);
+    } catch (error) {
+      console.error('[App] Failed to load subtitles for editing:', error);
+      // Still open editor without subtitles
+      const typeData = asset.typeData as ScreenshotTypeData;
+      setEditingScreenshot({
+        id: asset.id,
+        imageData: typeData.imageData,
+        timestamp: typeData.timestamp,
+        duration: 0,
+        videoUrl: asset.url,
+        videoTitle: asset.title,
+        width: 0,
+        height: 0,
+        subtitles: []
+      });
+      setIsScreenshotEditorOpen(true);
+    }
+  };
+
+  // Save edited screenshot
+  const handleSaveEditedScreenshot = async (data: ScreenshotSaveData) => {
+    try {
+      // Transform ScreenshotSaveData to Asset update format
+      const updateData = {
+        id: editingScreenshot.id,
+        typeData: {
+          selectedSubtitles: data.subtitles,
+          subtitleStyle: data.subtitleStyle,
+          finalImageData: data.finalImageData,
+        }
+      };
+
+      const response = await ipcRenderer.invoke('update-asset', updateData);
+
+      if (response.success) {
+        console.log('[App] Screenshot updated:', response.data.id);
+        setMaterialRefreshTrigger(prev => prev + 1);
+        setIsScreenshotEditorOpen(false);
+        setEditingScreenshot(null);
+        showToast('截图已更新', 'success');
+      } else {
+        throw new Error(response.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('[App] Failed to update screenshot:', error);
+      throw error;
+    }
   };
 
   return (
@@ -142,6 +395,28 @@ function App() {
         onAutoFetch={handleGetYouTubeSubtitles}
         currentUrl={browserRef.current?.getCurrentUrl() || ''}
       />
+
+      {/* Screenshot Editor (for post-processing) */}
+      <ScreenshotDialog
+        isOpen={isScreenshotEditorOpen}
+        onClose={() => {
+          setIsScreenshotEditorOpen(false);
+          setEditingScreenshot(null);
+        }}
+        screenshotData={editingScreenshot}
+        subtitles={editingScreenshot?.subtitles || []}
+        onSave={handleSaveEditedScreenshot}
+      />
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={hideToast}
+        />
+      )}
 
       {/* Floating Toggle Buttons */}
       <div className="fixed top-4 left-4 z-50">
@@ -165,7 +440,7 @@ function App() {
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
-        left={<Sidebar onRunPlugin={handleRunPlugin} onOpenSubtitleDialog={() => setIsSubtitleDialogOpen(true)} />}
+        left={<Sidebar onRunPlugin={handleRunPlugin} onOpenSubtitleDialog={() => setIsSubtitleDialogOpen(true)} onCaptureScreenshot={handleCaptureScreenshot} />}
         main={
           <div className="flex flex-col h-full">
             <TabBar
@@ -184,13 +459,13 @@ function App() {
                   initialUrl={tab.url}
                   isActive={tab.id === activeTabId}
                   onTitleChange={handleTitleChange}
+                  onUrlChange={handleUrlChange}
                   onData={(data, tabId) => {
                     if (data && data.type === 'video-time') {
-                      // Update current video time for this tab
-                      setTabVideoTime({
-                        ...tabVideoTime,
+                      setTabVideoTime(prev => ({
+                        ...prev,
                         [tabId]: data.data.currentTime
-                      });
+                      }));
                     }
                     else if (data && data.type === 'subtitle') {
                       setTabData((prev) => {
@@ -203,23 +478,21 @@ function App() {
                       if (rightCollapsed) setRightCollapsed(false);
                     }
                     else if (data && data.type === 'transcript') {
-                      // For full transcript, replace the entire state for this tab
-                      setTabData({
-                        ...tabData,
+                      setTabData(prev => ({
+                        ...prev,
                         [tabId]: data.data
-                      });
+                      }));
                       if (rightCollapsed) setRightCollapsed(false);
                     }
                     else if (data && data.type === 'material-saved') {
-                      // Trigger material panel refresh
                       setMaterialRefreshTrigger(prev => prev + 1);
                       if (rightCollapsed) setRightCollapsed(false);
                     }
                     else {
-                      setTabData({
-                        ...tabData,
+                      setTabData(prev => ({
+                        ...prev,
                         [tabId]: data
-                      });
+                      }));
                       if (rightCollapsed) setRightCollapsed(false);
                     }
                   }}
@@ -233,6 +506,7 @@ function App() {
             data={tabData[activeTabId]}
             currentVideoTime={tabVideoTime[activeTabId] || 0}
             materialRefreshTrigger={materialRefreshTrigger}
+            onEditScreenshot={handleEditScreenshot}
           />
         }
       />
