@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { AssetPanel } from './AssetPanel';
 import type { Asset } from './AssetCard';
-import { FileText, Package, SearchX, FileX } from 'lucide-react';
+import { FileText, Package, SearchX, FileX, Sparkles } from 'lucide-react';
 
 interface InfoPanelProps {
     data: any;
@@ -118,6 +118,59 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
         return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
     };
 
+    // Copy subtitles to English Learning Prompt template
+    const [copySuccess, setCopySuccess] = useState(false);
+
+    const copyToPrompt = async () => {
+        if (!Array.isArray(data) || data.length === 0) return;
+
+        // Extract subtitle text
+        const subtitleText = data.map(item => {
+            if (item.start !== undefined) {
+                return `[${formatTime(item.start)}] ${item.text}${item.translation ? `\n${item.translation}` : ''}`;
+            }
+            return item.text || '';
+        }).filter(Boolean).join('\n\n');
+
+        // English Learning Prompt template
+        const promptTemplate = `# Role
+你是一位拥有 20 年教学经验的高级同传翻译和英语教育专家，擅长捕捉英语中那些"字面意思"与"实际语境意义"存在巨大偏差的地道表达。
+
+# Task
+我会为你提供一段视频字幕文本。请你深度扫描并提取出符合"翻译不对称性"特征的短语、习惯用语（Idioms）、习语（Phrasal Verbs）或职场专业表达。
+
+# Selection Criteria (关键筛选标准)
+请优先提取符合以下条件的表达：
+1. **语义不对称：** 整体翻译 ≠ 逐词翻译之和。学习者即便认识所有单词，也很容易猜错意思。
+2. **场景高频：** 在专业视频、职场或真实生活对话中经常出现。
+3. **文化内涵：** 带有英语思维特色，无法在中文里直接找到一一对应字面翻译的词。
+
+# Output Format
+请以 Markdown 表格形式输出，包含以下字段：
+- **Phrase/Expression**: 原短语
+- **Literal Trap**: 字面直译的误区（故意写错，提示用户容易在哪跌倒）
+- **Authentic Meaning**: 真实地道含义（中文）
+- **Why it matters**: 解释为什么这个词重要，或者它的应用语境是什么。
+- **Contextual Example**: 基于给定的字幕内容或其场景，给出一个例句。
+
+# Workflow
+1. 过滤掉简单的基础词汇和可以直接字面对应的短语。
+2. 识别具有"翻译不对称性"的表达。
+3. 按照上述表格格式输出。
+
+# Input Subtitles
+${subtitleText}
+`;
+
+        try {
+            await navigator.clipboard.writeText(promptTemplate);
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
     const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
         { id: 'subtitles', label: '字幕', icon: FileText },
         { id: 'assets', label: '素材库', icon: Package },
@@ -196,6 +249,19 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
                                             title="导出为SRT字幕"
                                         >
                                             SRT
+                                        </button>
+                                        <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
+                                        <button
+                                            onClick={copyToPrompt}
+                                            className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
+                                                copySuccess
+                                                    ? 'text-green-600 bg-green-50'
+                                                    : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
+                                            }`}
+                                            title="复制字幕到英语学习Prompt"
+                                        >
+                                            <Sparkles size={12} />
+                                            {copySuccess ? '已复制' : 'AI学习'}
                                         </button>
                                         <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
                                     </>

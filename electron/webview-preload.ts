@@ -95,7 +95,7 @@ declare global {
     }
 
     // Override user agent
-    const chromeVersion = '120.0.0.0';
+    const chromeVersion = '131.0.0.0';
     const platform = navigator.platform;
     let userAgent: string;
 
@@ -114,6 +114,40 @@ declare global {
 
     Object.defineProperty(navigator, 'appVersion', {
         get: () => userAgent.replace('Mozilla/', ''),
+        configurable: true
+    });
+
+    // Override userAgentData for modern Chrome detection
+    const platformName = platform.includes('Mac') ? 'macOS' : platform.includes('Win') ? 'Windows' : 'Linux';
+    Object.defineProperty(navigator, 'userAgentData', {
+        get: () => ({
+            brands: [
+                { brand: 'Google Chrome', version: '131' },
+                { brand: 'Chromium', version: '131' },
+                { brand: 'Not_A Brand', version: '24' }
+            ],
+            mobile: false,
+            platform: platformName,
+            getHighEntropyValues: (hints: string[]) => Promise.resolve({
+                brands: [
+                    { brand: 'Google Chrome', version: '131' },
+                    { brand: 'Chromium', version: '131' },
+                    { brand: 'Not_A Brand', version: '24' }
+                ],
+                mobile: false,
+                platform: platformName,
+                platformVersion: platform.includes('Mac') ? '14.0.0' : platform.includes('Win') ? '15.0.0' : '6.5.0',
+                architecture: 'x86',
+                bitness: '64',
+                model: '',
+                uaFullVersion: '131.0.0.0',
+                fullVersionList: [
+                    { brand: 'Google Chrome', version: '131.0.0.0' },
+                    { brand: 'Chromium', version: '131.0.0.0' },
+                    { brand: 'Not_A Brand', version: '24.0.0.0' }
+                ]
+            })
+        }),
         configurable: true
     });
 
@@ -304,6 +338,105 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
             ipcRenderer.sendToHost('video-capture-result', { error: error.error || error.message });
         }
     });
+
+    // ============ Bilibili AI Subtitle Interception ============
+    // Intercept fetch requests to capture AI subtitle data from aisubtitle.hdslb.com
+
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const response = await originalFetch.apply(this, args);
+
+        try {
+            const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url;
+            if (url && url.includes('aisubtitle.hdslb.com')) {
+                console.log('[Verboo] Detected Bilibili AI subtitle request:', url);
+                const clonedResponse = response.clone();
+                const data = await clonedResponse.json();
+
+                // Parse AI subtitle data to standard format
+                const subtitles = parseBilibiliAISubtitle(data);
+                if (subtitles && subtitles.length > 0) {
+                    console.log('[Verboo] Captured AI subtitles:', subtitles.length, 'items');
+                    ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                        type: 'bilibili-ai-subtitle',
+                        data: subtitles,
+                        count: subtitles.length
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('[Verboo] Failed to parse AI subtitle:', e);
+        }
+
+        return response;
+    };
+
+    // Also intercept XMLHttpRequest for completeness
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
+        (this as any)._verbooUrl = typeof url === 'string' ? url : url.toString();
+        return originalXHROpen.apply(this, [method, url, ...rest] as any);
+    };
+
+    XMLHttpRequest.prototype.send = function (...args) {
+        const xhr = this;
+        const url = (xhr as any)._verbooUrl;
+
+        if (url && url.includes('aisubtitle.hdslb.com')) {
+            xhr.addEventListener('load', function () {
+                try {
+                    console.log('[Verboo] Detected Bilibili AI subtitle XHR:', url);
+                    const data = JSON.parse(xhr.responseText);
+                    const subtitles = parseBilibiliAISubtitle(data);
+                    if (subtitles && subtitles.length > 0) {
+                        console.log('[Verboo] Captured AI subtitles (XHR):', subtitles.length, 'items');
+                        ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                            type: 'bilibili-ai-subtitle',
+                            data: subtitles,
+                            count: subtitles.length
+                        });
+                    }
+                } catch (e) {
+                    console.error('[Verboo] Failed to parse AI subtitle (XHR):', e);
+                }
+            });
+        }
+
+        return originalXHRSend.apply(this, args);
+    };
+
+    /**
+     * Parse Bilibili AI subtitle response to standard SubtitleItem format
+     * B站 AI 字幕格式: { body: [{ from: number, to: number, content: string }] }
+     */
+    function parseBilibiliAISubtitle(data: any): Array<{ start: number; duration: number; text: string }> {
+        try {
+            // Handle different response structures
+            let body = data?.body;
+            if (!body && data?.data?.body) {
+                body = data.data.body;
+            }
+            if (!body && data?.data?.subtitle?.body) {
+                body = data.data.subtitle.body;
+            }
+
+            if (!Array.isArray(body)) {
+                console.log('[Verboo] AI subtitle body not found or not an array:', data);
+                return [];
+            }
+
+            return body.map((item: any) => ({
+                start: item.from || 0,
+                duration: (item.to || 0) - (item.from || 0),
+                text: item.content || ''
+            })).filter((item: any) => item.text.trim() !== '');
+        } catch (e) {
+            console.error('[Verboo] Failed to parse AI subtitle body:', e);
+            return [];
+        }
+    }
 
     // ============ Video Time Monitoring ============
     let videoTimeInterval: NodeJS.Timeout | null = null;

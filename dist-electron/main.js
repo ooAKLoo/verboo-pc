@@ -22,7 +22,7 @@ if (process.env.VITE_DEV_SERVER_URL) {
 }
 // Get a realistic Chrome User-Agent based on platform
 function getChromeUserAgent() {
-    const chromeVersion = '120.0.0.0';
+    const chromeVersion = '131.0.0.0';
     const platform = process.platform;
     if (platform === 'darwin') {
         return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
@@ -52,8 +52,10 @@ function createWindow() {
     // Set User-Agent for webview session to avoid Electron detection
     electron_1.session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         details.requestHeaders['User-Agent'] = userAgent;
-        // Remove headers that might expose Electron
-        delete details.requestHeaders['Sec-Ch-Ua'];
+        // Add proper Sec-CH-UA headers to look like a real Chrome browser
+        details.requestHeaders['Sec-CH-UA'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
+        details.requestHeaders['Sec-CH-UA-Mobile'] = '?0';
+        details.requestHeaders['Sec-CH-UA-Platform'] = process.platform === 'darwin' ? '"macOS"' : process.platform === 'win32' ? '"Windows"' : '"Linux"';
         callback({ requestHeaders: details.requestHeaders });
     });
     // Override User-Agent for the default session

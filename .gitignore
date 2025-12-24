@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+python-data/stardict 2.db
+*.csv
+*.db
+python-data/1、高考3500个英语单词表(带音标.xls

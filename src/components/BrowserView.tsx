@@ -35,7 +35,7 @@ const path = window.require('path');
 
 // Generate Chrome-like User-Agent based on platform
 function getChromeUserAgent(): string {
-    const chromeVersion = '120.0.0.0';
+    const chromeVersion = '131.0.0.0';
     const platform = window.navigator.platform;
 
     if (platform.includes('Mac')) {
@@ -166,6 +166,15 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
             const handleIpcMessage = (event: any) => {
                 if (event.channel === 'plugin-data' && onData) {
                     onData(event.args[0], tabId);
+                } else if (event.channel === 'bilibili-ai-subtitle' && onData) {
+                    // Handle Bilibili AI subtitle data
+                    const result = event.args[0];
+                    console.log('[BrowserView] Bilibili AI subtitle received:', result);
+                    onData({
+                        type: 'bilibili-ai-subtitle',
+                        data: result.data,
+                        count: result.count
+                    }, tabId);
                 } else if (event.channel === 'video-time-update' && onData) {
                     // Send video time update with a special type
                     onData({

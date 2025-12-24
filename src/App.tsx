@@ -19,6 +19,13 @@ interface ToastState {
   type: 'success' | 'error' | 'screenshot';
 }
 
+// Pending AI subtitle state for user confirmation
+interface PendingAISubtitle {
+  tabId: string;
+  data: SubtitleItem[];
+  count: number;
+}
+
 function App() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -48,6 +55,9 @@ function App() {
   // Track last loaded URL to avoid duplicate loads
   const lastLoadedUrlRef = useRef<{ [tabId: string]: string }>({});
 
+  // Pending AI subtitle for confirmation
+  const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
+
   const browserRef = React.useRef<BrowserViewHandle>(null);
   const { ipcRenderer } = window.require('electron');
 
@@ -62,6 +72,38 @@ function App() {
 
   const hideToast = useCallback(() => {
     setToast(null);
+  }, []);
+
+  // Accept AI subtitle and replace current subtitles
+  const acceptAISubtitle = useCallback(async () => {
+    if (!pendingAISubtitle) return;
+
+    const { tabId, data } = pendingAISubtitle;
+    console.log('[App] Accepting AI subtitle for tab:', tabId, data.length, 'items');
+
+    // Update tab data with AI subtitles
+    setTabData(prev => ({
+      ...prev,
+      [tabId]: data
+    }));
+
+    // Save to database
+    const url = tabUrls[tabId] || browserRef.current?.getCurrentUrl() || '';
+    const activeTab = tabs.find(t => t.id === tabId);
+    if (url) {
+      await saveSubtitlesToDatabase(url, activeTab?.title || '', 'bilibili-ai', data);
+      lastLoadedUrlRef.current[tabId] = url;
+    }
+
+    // Clear pending and show success
+    setPendingAISubtitle(null);
+    if (rightCollapsed) setRightCollapsed(false);
+    showToast('AI字幕已替换', 'success');
+  }, [pendingAISubtitle, tabUrls, tabs, rightCollapsed, showToast]);
+
+  // Dismiss AI subtitle prompt
+  const dismissAISubtitle = useCallback(() => {
+    setPendingAISubtitle(null);
   }, []);
 
   // Auto-load subtitles when URL changes
@@ -418,6 +460,34 @@ function App() {
         />
       )}
 
+      {/* AI Subtitle Confirmation Prompt */}
+      {pendingAISubtitle && pendingAISubtitle.tabId === activeTabId && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-lg border border-gray-200">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-sm text-gray-700">
+                检测到 AI 字幕 ({pendingAISubtitle.count} 条)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={acceptAISubtitle}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+              >
+                使用此字幕
+              </button>
+              <button
+                onClick={dismissAISubtitle}
+                className="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                忽略
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Toggle Buttons */}
       <div className="fixed top-4 left-4 z-50">
         <button
@@ -487,6 +557,15 @@ function App() {
                     else if (data && data.type === 'material-saved') {
                       setMaterialRefreshTrigger(prev => prev + 1);
                       if (rightCollapsed) setRightCollapsed(false);
+                    }
+                    else if (data && data.type === 'bilibili-ai-subtitle') {
+                      // Store pending AI subtitle for user confirmation
+                      console.log('[App] Received Bilibili AI subtitle:', data.count, 'items');
+                      setPendingAISubtitle({
+                        tabId,
+                        data: data.data,
+                        count: data.count
+                      });
                     }
                     else {
                       setTabData(prev => ({
