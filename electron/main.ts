@@ -19,8 +19,15 @@ import {
     getSubtitlesById,
     getAllSubtitles,
     deleteSubtitles,
+    // Vocabulary functions
+    initVocabDatabase,
+    closeVocabDatabase,
+    lookupWord,
+    lookupWords,
+    analyzeTextDifficulty,
     // Types
-    type AssetType
+    type AssetType,
+    type WordInfo
 } from './database';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -101,9 +108,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    // Initialize database
+    // Initialize databases
     initDatabase();
-    console.log('[Main] Database initialized');
+    initVocabDatabase();
+    console.log('[Main] Databases initialized');
 
     // Register IPC handlers
     setupIpcHandlers();
@@ -328,6 +336,50 @@ function setupIpcHandlers() {
 
     console.log('[Main] Subtitle IPC handlers registered successfully');
 
+    // ============ Vocabulary IPC Handlers ============
+
+    // Look up a single word
+    ipcMain.handle('lookup-word', async (event, word: string) => {
+        try {
+            const wordInfo = lookupWord(word);
+            return { success: true, data: wordInfo };
+        } catch (error) {
+            console.error('[IPC] lookup-word failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Look up multiple words
+    ipcMain.handle('lookup-words', async (event, words: string[]) => {
+        try {
+            const wordInfoMap = lookupWords(words);
+            // Convert Map to object for IPC serialization
+            const data: Record<string, WordInfo> = {};
+            for (const [word, info] of wordInfoMap) {
+                data[word] = info;
+            }
+            return { success: true, data };
+        } catch (error) {
+            console.error('[IPC] lookup-words failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Analyze text for difficult words
+    ipcMain.handle('analyze-text-difficulty', async (event, text: string) => {
+        try {
+            console.log('[IPC] analyze-text-difficulty called, text length:', text?.length);
+            const results = analyzeTextDifficulty(text);
+            console.log('[IPC] analyze-text-difficulty found', results.length, 'difficult words');
+            return { success: true, data: results };
+        } catch (error) {
+            console.error('[IPC] analyze-text-difficulty failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    console.log('[Main] Vocabulary IPC handlers registered successfully');
+
     // ============ Context Menu Handler ============
 
     // Show context menu for saving material
@@ -358,6 +410,7 @@ function setupIpcHandlers() {
 
 app.on('window-all-closed', () => {
     closeDatabase();
+    closeVocabDatabase();
     if (process.platform !== 'darwin') {
         app.quit();
     }

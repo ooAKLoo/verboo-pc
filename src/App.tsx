@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { BrowserView } from './components/BrowserView';
-import type { BrowserViewHandle } from './components/BrowserView';
+import type { BrowserViewHandle, NavigationState } from './components/BrowserView';
 import { InfoPanel } from './components/InfoPanel';
 import { TabBar, type Tab } from './components/TabBar';
 import { SubtitleDialog } from './components/SubtitleDialog';
@@ -30,6 +30,7 @@ function App() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
+  const [showEnglishLearning, setShowEnglishLearning] = useState(false);
 
   // Screenshot editing mode (for post-processing)
   const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
@@ -54,6 +55,14 @@ function App() {
 
   // Track last loaded URL to avoid duplicate loads
   const lastLoadedUrlRef = useRef<{ [tabId: string]: string }>({});
+
+  // Navigation state for Sidebar toolbar
+  const [navState, setNavState] = useState<NavigationState>({
+    inputUrl: 'https://www.google.com',
+    isLoading: false,
+    canGoBack: false,
+    canGoForward: false
+  });
 
   // Pending AI subtitle for confirmation
   const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
@@ -203,6 +212,39 @@ function App() {
       ...prev,
       [tabId]: url
     }));
+  };
+
+  // Handle navigation state changes from BrowserView
+  const handleNavigationStateChange = (state: NavigationState, tabId: string) => {
+    if (tabId === activeTabId) {
+      setNavState(state);
+    }
+  };
+
+  // Navigation callbacks for Sidebar
+  const handleInputUrlChange = (url: string) => {
+    if (browserRef.current) {
+      browserRef.current.setInputUrl(url);
+    }
+  };
+
+  const handleNavigate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (browserRef.current) {
+      browserRef.current.navigate(navState.inputUrl);
+    }
+  };
+
+  const handleGoBack = () => {
+    browserRef.current?.goBack();
+  };
+
+  const handleGoForward = () => {
+    browserRef.current?.goForward();
+  };
+
+  const handleReload = () => {
+    browserRef.current?.reload();
   };
 
   const handleRunPlugin = async (script: string) => {
@@ -510,7 +552,23 @@ function App() {
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
-        left={<Sidebar onRunPlugin={handleRunPlugin} onOpenSubtitleDialog={() => setIsSubtitleDialogOpen(true)} onCaptureScreenshot={handleCaptureScreenshot} />}
+        left={
+          <Sidebar
+            onRunPlugin={handleRunPlugin}
+            onOpenSubtitleDialog={() => setIsSubtitleDialogOpen(true)}
+            onCaptureScreenshot={handleCaptureScreenshot}
+            onOpenEnglishLearning={() => { setShowEnglishLearning(true); if (rightCollapsed) setRightCollapsed(false); }}
+            inputUrl={navState.inputUrl}
+            onInputUrlChange={handleInputUrlChange}
+            onNavigate={handleNavigate}
+            isLoading={navState.isLoading}
+            canGoBack={navState.canGoBack}
+            canGoForward={navState.canGoForward}
+            onGoBack={handleGoBack}
+            onGoForward={handleGoForward}
+            onReload={handleReload}
+          />
+        }
         main={
           <div className="flex flex-col h-full">
             <TabBar
@@ -530,6 +588,7 @@ function App() {
                   isActive={tab.id === activeTabId}
                   onTitleChange={handleTitleChange}
                   onUrlChange={handleUrlChange}
+                  onNavigationStateChange={handleNavigationStateChange}
                   onData={(data, tabId) => {
                     if (data && data.type === 'video-time') {
                       setTabVideoTime(prev => ({
@@ -586,6 +645,8 @@ function App() {
             currentVideoTime={tabVideoTime[activeTabId] || 0}
             materialRefreshTrigger={materialRefreshTrigger}
             onEditScreenshot={handleEditScreenshot}
+            showEnglishLearning={showEnglishLearning}
+            onCloseEnglishLearning={() => setShowEnglishLearning(false)}
           />
         }
       />

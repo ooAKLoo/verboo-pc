@@ -1,20 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { AssetPanel } from './AssetPanel';
 import type { Asset } from './AssetCard';
-import { FileText, Package, SearchX, FileX, Sparkles } from 'lucide-react';
+import { EnglishLearning } from './EnglishLearning';
+import { FileText, Package, SearchX, FileX, Sparkles, BookOpen } from 'lucide-react';
 
 interface InfoPanelProps {
     data: any;
     currentVideoTime?: number;
     materialRefreshTrigger?: number;
     onEditScreenshot?: (asset: Asset) => void;
+    showEnglishLearning?: boolean;
+    onCloseEnglishLearning?: () => void;
 }
 
-type TabType = 'subtitles' | 'assets';
+type TabType = 'subtitles' | 'assets' | 'learning';
 
-export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot }: InfoPanelProps) {
+export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot, showEnglishLearning = false, onCloseEnglishLearning }: InfoPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('subtitles');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Switch to learning tab when showEnglishLearning changes
+    useEffect(() => {
+        if (showEnglishLearning) {
+            setActiveTab('learning');
+        }
+    }, [showEnglishLearning]);
     const [autoScroll, setAutoScroll] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -174,6 +184,7 @@ ${subtitleText}
     const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
         { id: 'subtitles', label: '字幕', icon: FileText },
         { id: 'assets', label: '素材库', icon: Package },
+        { id: 'learning', label: '学习', icon: BookOpen },
     ];
 
     return (
@@ -186,7 +197,7 @@ ${subtitleText}
                         className="absolute top-0.5 bottom-0.5 rounded-md bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-200 ease-out"
                         style={{
                             width: `calc(${100 / tabs.length}% - 2px)`,
-                            left: activeTab === 'subtitles' ? '2px' : `calc(${100 / tabs.length}% - 0px)`,
+                            left: activeTab === 'subtitles' ? '2px' : activeTab === 'assets' ? `calc(${100 / tabs.length}%)` : `calc(${200 / tabs.length}%)`,
                         }}
                     />
                     {tabs.map((tab) => (
@@ -211,6 +222,16 @@ ${subtitleText}
                 <AssetPanel
                     refreshTrigger={materialRefreshTrigger}
                     onEditScreenshot={onEditScreenshot}
+                />
+            )}
+
+            {/* Learning Tab */}
+            {activeTab === 'learning' && (
+                <EnglishLearning
+                    onBack={() => {
+                        setActiveTab('subtitles');
+                        onCloseEnglishLearning?.();
+                    }}
                 />
             )}
 

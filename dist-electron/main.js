@@ -78,9 +78,10 @@ function createWindow() {
     }
 }
 electron_1.app.whenReady().then(() => {
-    // Initialize database
+    // Initialize databases
     (0, database_1.initDatabase)();
-    console.log('[Main] Database initialized');
+    (0, database_1.initVocabDatabase)();
+    console.log('[Main] Databases initialized');
     // Register IPC handlers
     setupIpcHandlers();
     createWindow();
@@ -291,6 +292,48 @@ function setupIpcHandlers() {
         }
     });
     console.log('[Main] Subtitle IPC handlers registered successfully');
+    // ============ Vocabulary IPC Handlers ============
+    // Look up a single word
+    electron_1.ipcMain.handle('lookup-word', async (event, word) => {
+        try {
+            const wordInfo = (0, database_1.lookupWord)(word);
+            return { success: true, data: wordInfo };
+        }
+        catch (error) {
+            console.error('[IPC] lookup-word failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    // Look up multiple words
+    electron_1.ipcMain.handle('lookup-words', async (event, words) => {
+        try {
+            const wordInfoMap = (0, database_1.lookupWords)(words);
+            // Convert Map to object for IPC serialization
+            const data = {};
+            for (const [word, info] of wordInfoMap) {
+                data[word] = info;
+            }
+            return { success: true, data };
+        }
+        catch (error) {
+            console.error('[IPC] lookup-words failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    // Analyze text for difficult words
+    electron_1.ipcMain.handle('analyze-text-difficulty', async (event, text) => {
+        try {
+            console.log('[IPC] analyze-text-difficulty called, text length:', text?.length);
+            const results = (0, database_1.analyzeTextDifficulty)(text);
+            console.log('[IPC] analyze-text-difficulty found', results.length, 'difficult words');
+            return { success: true, data: results };
+        }
+        catch (error) {
+            console.error('[IPC] analyze-text-difficulty failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    console.log('[Main] Vocabulary IPC handlers registered successfully');
     // ============ Context Menu Handler ============
     // Show context menu for saving material
     electron_1.ipcMain.on('show-save-material-menu', (event, { x, y, canCapture }) => {
@@ -316,6 +359,7 @@ function setupIpcHandlers() {
 }
 electron_1.app.on('window-all-closed', () => {
     (0, database_1.closeDatabase)();
+    (0, database_1.closeVocabDatabase)();
     if (process.platform !== 'darwin') {
         electron_1.app.quit();
     }

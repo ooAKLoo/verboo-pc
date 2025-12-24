@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
 
 // Type definition for the webview tag to avoid TS errors
 declare global {
@@ -53,6 +52,19 @@ export interface BrowserViewHandle {
     executeScript: (script: string) => Promise<any>;
     getCurrentUrl: () => string;
     captureVideoFrame: () => Promise<any>;
+    // Navigation controls
+    goBack: () => void;
+    goForward: () => void;
+    reload: () => void;
+    navigate: (targetUrl: string) => void;
+    setInputUrl: (url: string) => void;
+}
+
+export interface NavigationState {
+    inputUrl: string;
+    isLoading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
 }
 
 interface BrowserViewProps {
@@ -62,10 +74,11 @@ interface BrowserViewProps {
     onData?: (data: any, tabId: string) => void;
     onTitleChange?: (title: string, tabId: string) => void;
     onUrlChange?: (url: string, tabId: string) => void;
+    onNavigationStateChange?: (state: NavigationState, tabId: string) => void;
 }
 
 export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>(
-    ({ tabId, initialUrl, isActive, onData, onTitleChange, onUrlChange }, ref) => {
+    ({ tabId, initialUrl, isActive, onData, onTitleChange, onUrlChange, onNavigationStateChange }, ref) => {
         const [url, setUrl] = useState(initialUrl);
         const [inputUrl, setInputUrl] = useState(initialUrl);
         const [isLoading, setIsLoading] = useState(false);
@@ -124,8 +137,26 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                         reject({ error: 'Capture timeout' });
                     }, 5000);
                 });
-            }
+            },
+            goBack: () => webviewRef.current?.goBack(),
+            goForward: () => webviewRef.current?.goForward(),
+            reload: () => webviewRef.current?.reload(),
+            navigate: (targetUrl: string) => {
+                let finalUrl = targetUrl;
+                if (!finalUrl.startsWith('http')) {
+                    finalUrl = 'https://' + finalUrl;
+                }
+                setUrl(finalUrl);
+            },
+            setInputUrl: (newUrl: string) => setInputUrl(newUrl)
         }));
+
+        // Notify parent of navigation state changes
+        useEffect(() => {
+            if (onNavigationStateChange && isActive) {
+                onNavigationStateChange({ inputUrl, isLoading, canGoBack, canGoForward }, tabId);
+            }
+        }, [inputUrl, isLoading, canGoBack, canGoForward, isActive, tabId, onNavigationStateChange]);
 
         useEffect(() => {
             const webview = webviewRef.current;
@@ -247,61 +278,8 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
             };
         }, [onData, onUrlChange, isActive, tabId]);
 
-        const handleNavigate = (e: React.FormEvent) => {
-            e.preventDefault();
-            let target = inputUrl;
-            if (!target.startsWith('http')) {
-                target = 'https://' + target;
-            }
-            setUrl(target);
-            // Setting url prop triggers webview navigation, but we can also use loadURL if we wanted
-        };
-
-        const goBack = () => webviewRef.current?.goBack();
-        const goForward = () => webviewRef.current?.goForward();
-        const reload = () => webviewRef.current?.reload();
-
         return (
-            <div className={`flex flex-col h-full relative group bg-white ${isActive ? '' : 'hidden'}`}>
-                {/* Floating Toolbar - moved to bottom to avoid blocking content */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 w-[600px] max-w-[90%] transition-all duration-300 opacity-0 group-hover:opacity-100 focus-within:opacity-100 translate-y-[10px] group-hover:translate-y-0 focus-within:translate-y-0">
-                    <div className="bg-white/90 backdrop-blur-md shadow-lg border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={goBack}
-                                disabled={!canGoBack}
-                                className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoBack ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
-                            >
-                                <ArrowLeft size={16} />
-                            </button>
-                            <button
-                                onClick={goForward}
-                                disabled={!canGoForward}
-                                className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoForward ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
-                            >
-                                <ArrowRight size={16} />
-                            </button>
-                            <button onClick={reload} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
-                                {isLoading ? (
-                                    <Loader2 size={16} className="animate-spin" />
-                                ) : (
-                                    <RotateCw size={16} />
-                                )}
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleNavigate} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
-                            <input
-                                type="text"
-                                value={inputUrl}
-                                onChange={(e) => setInputUrl(e.target.value)}
-                                className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
-                                placeholder="Enter URL..."
-                            />
-                        </form>
-                    </div>
-                </div>
-
+            <div className={`flex flex-col h-full relative bg-white ${isActive ? '' : 'hidden'}`}>
                 {/* Webview Container */}
                 <div className="flex-1 w-full h-full pt-0">
                     <webview

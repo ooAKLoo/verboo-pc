@@ -26,6 +26,12 @@ exports.getSubtitlesById = getSubtitlesById;
 exports.getAllSubtitles = getAllSubtitles;
 exports.deleteSubtitles = deleteSubtitles;
 exports.getSubtitlesCount = getSubtitlesCount;
+exports.initVocabDatabase = initVocabDatabase;
+exports.closeVocabDatabase = closeVocabDatabase;
+exports.lookupWord = lookupWord;
+exports.lookupWords = lookupWords;
+exports.getWordDifficulty = getWordDifficulty;
+exports.analyzeTextDifficulty = analyzeTextDifficulty;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
 const electron_1 = require("electron");
@@ -385,4 +391,168 @@ function getSubtitlesCount() {
     const db = getDatabase();
     const result = db.prepare('SELECT COUNT(*) as count FROM subtitles').get();
     return result.count;
+}
+// ============ Vocabulary Database Functions ============
+let vocabDb = null;
+/**
+ * Get vocabulary database path
+ */
+function getVocabDbPath() {
+    // In development, use the python-data folder
+    // In production, we should bundle this or copy to userData
+    if (process.env.VITE_DEV_SERVER_URL) {
+        return path_1.default.join(__dirname, '..', 'python-data', 'verboo_vocabulary.db');
+    }
+    // Production: look in resources folder
+    return path_1.default.join(process.resourcesPath || __dirname, 'python-data', 'verboo_vocabulary.db');
+}
+/**
+ * Initialize vocabulary database connection (read-only)
+ */
+function initVocabDatabase() {
+    if (vocabDb)
+        return vocabDb;
+    const dbPath = getVocabDbPath();
+    console.log('[Database] Initializing vocabulary database at:', dbPath);
+    try {
+        // Open in read-only mode
+        vocabDb = new better_sqlite3_1.default(dbPath, { readonly: true, fileMustExist: true });
+        console.log('[Database] Vocabulary database initialized successfully');
+        return vocabDb;
+    }
+    catch (error) {
+        console.error('[Database] Failed to open vocabulary database:', error);
+        return null;
+    }
+}
+/**
+ * Close vocabulary database connection
+ */
+function closeVocabDatabase() {
+    if (vocabDb) {
+        vocabDb.close();
+        vocabDb = null;
+        console.log('[Database] Vocabulary database closed');
+    }
+}
+/**
+ * Convert vocab row to WordInfo
+ */
+function rowToWordInfo(row) {
+    return {
+        word: row.word,
+        phonetic: row.phonetic || undefined,
+        definitionEn: row.definition_en || undefined,
+        definitionCn: row.definition_cn || undefined,
+        pos: row.pos || undefined,
+        cefrLevel: row.cefr_level || undefined,
+        collinsStar: row.collins_star || undefined,
+        cocaRank: row.coca_rank || undefined,
+        bncRank: row.bnc_rank || undefined,
+        isOxford3000: row.is_oxford_3000 === 1,
+        isCet4: row.is_cet4 === 1,
+        isCet6: row.is_cet6 === 1,
+        isZk: row.is_zk === 1,
+        isGk: row.is_gk === 1,
+        isKy: row.is_ky === 1,
+        isToefl: row.is_toefl === 1,
+        isIelts: row.is_ielts === 1,
+        isGre: row.is_gre === 1,
+        exchange: row.exchange || undefined,
+    };
+}
+/**
+ * Look up a single word
+ */
+function lookupWord(word) {
+    const db = initVocabDatabase();
+    if (!db)
+        return null;
+    const row = db.prepare('SELECT * FROM words WHERE word = ?').get(word.toLowerCase());
+    return row ? rowToWordInfo(row) : null;
+}
+/**
+ * Look up multiple words at once
+ */
+function lookupWords(words) {
+    const result = new Map();
+    const db = initVocabDatabase();
+    console.log('[Database] lookupWords - vocabDb status:', db ? 'connected' : 'null');
+    if (!db || words.length === 0) {
+        console.log('[Database] lookupWords - returning empty (db null or no words)');
+        return result;
+    }
+    // Deduplicate and lowercase
+    const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))];
+    // Batch query for efficiency - limit to first 500 words to avoid SQL issues
+    const wordsToQuery = uniqueWords.slice(0, 500);
+    const placeholders = wordsToQuery.map(() => '?').join(',');
+    const query = `SELECT * FROM words WHERE word IN (${placeholders})`;
+    try {
+        const rows = db.prepare(query).all(...wordsToQuery);
+        console.log('[Database] lookupWords - query returned', rows.length, 'rows');
+        for (const row of rows) {
+            result.set(row.word, rowToWordInfo(row));
+        }
+    }
+    catch (error) {
+        console.error('[Database] lookupWords - query error:', error);
+    }
+    return result;
+}
+/**
+ * Determine if a word is considered "difficult" based on CEFR level and frequency
+ * Returns difficulty level: 'high' | 'medium' | 'low' | null
+ */
+function getWordDifficulty(word) {
+    // High difficulty: C1/C2 level, GRE words, low frequency
+    if (word.cefrLevel === 'C1' || word.cefrLevel === 'C2' || word.isGre) {
+        return 'high';
+    }
+    // Medium difficulty: B2 level, TOEFL/IELTS/考研词汇, or COCA rank > 5000
+    if (word.cefrLevel === 'B2' ||
+        word.isToefl ||
+        word.isIelts ||
+        word.isKy ||
+        (word.cocaRank && word.cocaRank > 5000)) {
+        return 'medium';
+    }
+    // Low difficulty: B1 level, CET-6
+    if (word.cefrLevel === 'B1' || word.isCet6) {
+        return 'low';
+    }
+    // Basic words (A1, A2, CET-4, 中考/高考) - not marked as difficult
+    return null;
+}
+/**
+ * Analyze text and find difficult words
+ * Returns array of words with their info and difficulty level
+ */
+function analyzeTextDifficulty(text) {
+    // Extract words from text (simple tokenization)
+    const wordPattern = /\b[a-zA-Z]{2,}\b/g;
+    const matches = text.match(wordPattern) || [];
+    console.log('[Database] analyzeTextDifficulty - extracted words count:', matches.length);
+    // Get unique words
+    const uniqueWords = [...new Set(matches.map(w => w.toLowerCase()))];
+    console.log('[Database] analyzeTextDifficulty - unique words count:', uniqueWords.length);
+    // Look up all words
+    const wordInfoMap = lookupWords(uniqueWords);
+    console.log('[Database] analyzeTextDifficulty - found in database:', wordInfoMap.size);
+    const results = [];
+    for (const [word, info] of wordInfoMap) {
+        const difficulty = getWordDifficulty(info);
+        if (difficulty) {
+            results.push({ word, info, difficulty });
+        }
+    }
+    // Sort by difficulty (high first) then by word
+    results.sort((a, b) => {
+        const diffOrder = { high: 0, medium: 1, low: 2 };
+        const diffCompare = diffOrder[a.difficulty] - diffOrder[b.difficulty];
+        if (diffCompare !== 0)
+            return diffCompare;
+        return a.word.localeCompare(b.word);
+    });
+    return results;
 }

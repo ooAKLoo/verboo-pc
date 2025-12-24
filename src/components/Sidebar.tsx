@@ -1,10 +1,37 @@
+import { ArrowLeft, ArrowRight, RotateCw, Loader2 } from 'lucide-react';
+
 interface SidebarProps {
     onRunPlugin: (script: string) => void;
     onOpenSubtitleDialog: () => void;
     onCaptureScreenshot: () => void;
+    onOpenEnglishLearning: () => void;
+    // Navigation toolbar props
+    inputUrl: string;
+    onInputUrlChange: (url: string) => void;
+    onNavigate: (e: React.FormEvent) => void;
+    isLoading: boolean;
+    canGoBack: boolean;
+    canGoForward: boolean;
+    onGoBack: () => void;
+    onGoForward: () => void;
+    onReload: () => void;
 }
 
-export function Sidebar({ onRunPlugin, onOpenSubtitleDialog, onCaptureScreenshot }: SidebarProps) {
+export function Sidebar({
+    onRunPlugin,
+    onOpenSubtitleDialog,
+    onCaptureScreenshot,
+    onOpenEnglishLearning,
+    inputUrl,
+    onInputUrlChange,
+    onNavigate,
+    isLoading,
+    canGoBack,
+    canGoForward,
+    onGoBack,
+    onGoForward,
+    onReload
+}: SidebarProps) {
     return (
         <div className="h-full flex flex-col py-4 font-sans bg-white">
             {/* Header */}
@@ -45,6 +72,55 @@ export function Sidebar({ onRunPlugin, onOpenSubtitleDialog, onCaptureScreenshot
                 >
                     <span className="text-[13px] font-medium text-[#18181b]">视频截图</span>
                     <span className="text-[11px] text-[#a1a1aa] mt-0.5">捕获当前画面和字幕</span>
+                </div>
+
+                <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
+
+                <div
+                    onClick={onOpenEnglishLearning}
+                    className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                >
+                    <span className="text-[13px] font-medium text-[#18181b]">英语学习</span>
+                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">分析字幕中的重点难点词汇</span>
+                </div>
+            </div>
+
+            {/* Navigation Toolbar - Fixed at bottom */}
+            <div className="px-2 pb-2">
+                <div className="bg-white/90 backdrop-blur-md shadow-lg border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={onGoBack}
+                            disabled={!canGoBack}
+                            className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoBack ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
+                        >
+                            <ArrowLeft size={16} />
+                        </button>
+                        <button
+                            onClick={onGoForward}
+                            disabled={!canGoForward}
+                            className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoForward ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
+                        >
+                            <ArrowRight size={16} />
+                        </button>
+                        <button onClick={onReload} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
+                            {isLoading ? (
+                                <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                                <RotateCw size={16} />
+                            )}
+                        </button>
+                    </div>
+
+                    <form onSubmit={onNavigate} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
+                        <input
+                            type="text"
+                            value={inputUrl}
+                            onChange={(e) => onInputUrlChange(e.target.value)}
+                            className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
+                            placeholder="Enter URL..."
+                        />
+                    </form>
                 </div>
             </div>
         </div>

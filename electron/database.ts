@@ -624,3 +624,246 @@ export function getSubtitlesCount(): number {
     const result = db.prepare('SELECT COUNT(*) as count FROM subtitles').get() as { count: number };
     return result.count;
 }
+
+// ============ Vocabulary Database Functions ============
+
+let vocabDb: Database.Database | null = null;
+
+/**
+ * Word info from vocabulary database
+ */
+export interface WordInfo {
+    word: string;
+    phonetic?: string;
+    definitionEn?: string;
+    definitionCn?: string;
+    pos?: string;
+    cefrLevel?: string;
+    collinsStar?: number;
+    cocaRank?: number;
+    bncRank?: number;
+    isOxford3000?: boolean;
+    isCet4?: boolean;
+    isCet6?: boolean;
+    isZk?: boolean;
+    isGk?: boolean;
+    isKy?: boolean;
+    isToefl?: boolean;
+    isIelts?: boolean;
+    isGre?: boolean;
+    exchange?: string;
+}
+
+interface VocabRow {
+    word: string;
+    phonetic: string | null;
+    definition_en: string | null;
+    definition_cn: string | null;
+    pos: string | null;
+    cefr_level: string | null;
+    collins_star: number;
+    coca_rank: number;
+    bnc_rank: number;
+    is_oxford_3000: number;
+    is_cet4: number;
+    is_cet6: number;
+    is_zk: number;
+    is_gk: number;
+    is_ky: number;
+    is_toefl: number;
+    is_ielts: number;
+    is_gre: number;
+    exchange: string | null;
+}
+
+/**
+ * Get vocabulary database path
+ */
+function getVocabDbPath(): string {
+    // In development, use the python-data folder
+    // In production, we should bundle this or copy to userData
+    if (process.env.VITE_DEV_SERVER_URL) {
+        return path.join(__dirname, '..', 'python-data', 'verboo_vocabulary.db');
+    }
+    // Production: look in resources folder
+    return path.join(process.resourcesPath || __dirname, 'python-data', 'verboo_vocabulary.db');
+}
+
+/**
+ * Initialize vocabulary database connection (read-only)
+ */
+export function initVocabDatabase(): Database.Database | null {
+    if (vocabDb) return vocabDb;
+
+    const dbPath = getVocabDbPath();
+    console.log('[Database] Initializing vocabulary database at:', dbPath);
+
+    try {
+        // Open in read-only mode
+        vocabDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+        console.log('[Database] Vocabulary database initialized successfully');
+        return vocabDb;
+    } catch (error) {
+        console.error('[Database] Failed to open vocabulary database:', error);
+        return null;
+    }
+}
+
+/**
+ * Close vocabulary database connection
+ */
+export function closeVocabDatabase(): void {
+    if (vocabDb) {
+        vocabDb.close();
+        vocabDb = null;
+        console.log('[Database] Vocabulary database closed');
+    }
+}
+
+/**
+ * Convert vocab row to WordInfo
+ */
+function rowToWordInfo(row: VocabRow): WordInfo {
+    return {
+        word: row.word,
+        phonetic: row.phonetic || undefined,
+        definitionEn: row.definition_en || undefined,
+        definitionCn: row.definition_cn || undefined,
+        pos: row.pos || undefined,
+        cefrLevel: row.cefr_level || undefined,
+        collinsStar: row.collins_star || undefined,
+        cocaRank: row.coca_rank || undefined,
+        bncRank: row.bnc_rank || undefined,
+        isOxford3000: row.is_oxford_3000 === 1,
+        isCet4: row.is_cet4 === 1,
+        isCet6: row.is_cet6 === 1,
+        isZk: row.is_zk === 1,
+        isGk: row.is_gk === 1,
+        isKy: row.is_ky === 1,
+        isToefl: row.is_toefl === 1,
+        isIelts: row.is_ielts === 1,
+        isGre: row.is_gre === 1,
+        exchange: row.exchange || undefined,
+    };
+}
+
+/**
+ * Look up a single word
+ */
+export function lookupWord(word: string): WordInfo | null {
+    const db = initVocabDatabase();
+    if (!db) return null;
+
+    const row = db.prepare('SELECT * FROM words WHERE word = ?').get(word.toLowerCase()) as VocabRow | undefined;
+    return row ? rowToWordInfo(row) : null;
+}
+
+/**
+ * Look up multiple words at once
+ */
+export function lookupWords(words: string[]): Map<string, WordInfo> {
+    const result = new Map<string, WordInfo>();
+    const db = initVocabDatabase();
+    console.log('[Database] lookupWords - vocabDb status:', db ? 'connected' : 'null');
+    if (!db || words.length === 0) {
+        console.log('[Database] lookupWords - returning empty (db null or no words)');
+        return result;
+    }
+
+    // Deduplicate and lowercase
+    const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))];
+
+    // Batch query for efficiency - limit to first 500 words to avoid SQL issues
+    const wordsToQuery = uniqueWords.slice(0, 500);
+    const placeholders = wordsToQuery.map(() => '?').join(',');
+    const query = `SELECT * FROM words WHERE word IN (${placeholders})`;
+
+    try {
+        const rows = db.prepare(query).all(...wordsToQuery) as VocabRow[];
+        console.log('[Database] lookupWords - query returned', rows.length, 'rows');
+
+        for (const row of rows) {
+            result.set(row.word, rowToWordInfo(row));
+        }
+    } catch (error) {
+        console.error('[Database] lookupWords - query error:', error);
+    }
+
+    return result;
+}
+
+/**
+ * Determine if a word is considered "difficult" based on CEFR level and frequency
+ * Returns difficulty level: 'high' | 'medium' | 'low' | null
+ */
+export function getWordDifficulty(word: WordInfo): 'high' | 'medium' | 'low' | null {
+    // High difficulty: C1/C2 level, GRE words, low frequency
+    if (word.cefrLevel === 'C1' || word.cefrLevel === 'C2' || word.isGre) {
+        return 'high';
+    }
+
+    // Medium difficulty: B2 level, TOEFL/IELTS/考研词汇, or COCA rank > 5000
+    if (
+        word.cefrLevel === 'B2' ||
+        word.isToefl ||
+        word.isIelts ||
+        word.isKy ||
+        (word.cocaRank && word.cocaRank > 5000)
+    ) {
+        return 'medium';
+    }
+
+    // Low difficulty: B1 level, CET-6
+    if (word.cefrLevel === 'B1' || word.isCet6) {
+        return 'low';
+    }
+
+    // Basic words (A1, A2, CET-4, 中考/高考) - not marked as difficult
+    return null;
+}
+
+/**
+ * Analyze text and find difficult words
+ * Returns array of words with their info and difficulty level
+ */
+export function analyzeTextDifficulty(text: string): Array<{
+    word: string;
+    info: WordInfo;
+    difficulty: 'high' | 'medium' | 'low';
+}> {
+    // Extract words from text (simple tokenization)
+    const wordPattern = /\b[a-zA-Z]{2,}\b/g;
+    const matches = text.match(wordPattern) || [];
+    console.log('[Database] analyzeTextDifficulty - extracted words count:', matches.length);
+
+    // Get unique words
+    const uniqueWords = [...new Set(matches.map(w => w.toLowerCase()))];
+    console.log('[Database] analyzeTextDifficulty - unique words count:', uniqueWords.length);
+
+    // Look up all words
+    const wordInfoMap = lookupWords(uniqueWords);
+    console.log('[Database] analyzeTextDifficulty - found in database:', wordInfoMap.size);
+
+    const results: Array<{
+        word: string;
+        info: WordInfo;
+        difficulty: 'high' | 'medium' | 'low';
+    }> = [];
+
+    for (const [word, info] of wordInfoMap) {
+        const difficulty = getWordDifficulty(info);
+        if (difficulty) {
+            results.push({ word, info, difficulty });
+        }
+    }
+
+    // Sort by difficulty (high first) then by word
+    results.sort((a, b) => {
+        const diffOrder = { high: 0, medium: 1, low: 2 };
+        const diffCompare = diffOrder[a.difficulty] - diffOrder[b.difficulty];
+        if (diffCompare !== 0) return diffCompare;
+        return a.word.localeCompare(b.word);
+    });
+
+    return results;
+}
