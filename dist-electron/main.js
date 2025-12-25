@@ -72,7 +72,7 @@ function createWebContentsView(tabId, url) {
     view.setBounds(viewBounds);
     // Set border radius (Electron 33+ feature)
     if (typeof view.setBorderRadius === 'function') {
-        view.setBorderRadius(0);
+        view.setBorderRadius(16);
     }
     // Navigate to URL
     view.webContents.loadURL(url);
@@ -209,6 +209,8 @@ function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1200,
         height: 800,
+        titleBarStyle: 'hiddenInset', // macOS: 隐藏标题栏但保留红绿灯按钮
+        trafficLightPosition: { x: 16, y: 18 }, // 调整红绿灯位置
         webPreferences: {
             preload: path_1.default.join(__dirname, 'preload.js'),
             nodeIntegration: true,

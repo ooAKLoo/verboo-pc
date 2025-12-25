@@ -4,6 +4,8 @@ import { Sidebar } from './components/Sidebar';
 import { BrowserView } from './components/BrowserView';
 import type { BrowserViewHandle, NavigationState } from './components/BrowserView';
 import { InfoPanel } from './components/InfoPanel';
+import { LearningPanel } from './components/LearningPanel';
+import { AssetPanelFull } from './components/AssetPanelFull';
 import { SubtitleDialog } from './components/SubtitleDialog';
 import { ScreenshotDialog } from './components/ScreenshotDialog';
 import type { ScreenshotSaveData } from './components/ScreenshotDialog';
@@ -29,6 +31,8 @@ function App() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
   const [showEnglishLearning, setShowEnglishLearning] = useState(false);
+  const [learningMode, setLearningMode] = useState(false);
+  const [assetMode, setAssetMode] = useState(false);
 
   // Screenshot editing mode (for post-processing)
   const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
@@ -522,28 +526,47 @@ function App() {
         </div>
       )}
 
-      {/* Floating Toggle Buttons */}
-      <div className="fixed top-4 left-4 z-50">
-        <button
-          onClick={() => setLeftCollapsed(!leftCollapsed)}
-          className="p-1.5 bg-transparent text-tertiary hover:text-primary hover:bg-white/5 rounded-md transition-all duration-200"
-        >
-          <PanelLeft size={18} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
-        </button>
-      </div>
+      {/* Custom Titlebar with Toggle Buttons */}
+      <div
+        className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        {/* Left side - after traffic lights (macOS) */}
+        <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button
+            onClick={() => setLeftCollapsed(!leftCollapsed)}
+            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200 shadow-sm"
+          >
+            <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
+          </button>
+        </div>
 
-      <div className="fixed top-4 right-4 z-50">
-        <button
-          onClick={() => setRightCollapsed(!rightCollapsed)}
-          className="p-1.5 bg-transparent text-tertiary hover:text-primary hover:bg-white/5 rounded-md transition-all duration-200"
-        >
-          <PanelRight size={18} className={rightCollapsed ? "opacity-50" : "opacity-100"} />
-        </button>
+        {/* Right side */}
+        <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <button
+            onClick={() => {
+              if (learningMode) {
+                setLearningMode(false);
+                ipcRenderer.invoke('wcv-show-active');
+              } else if (assetMode) {
+                setAssetMode(false);
+                ipcRenderer.invoke('wcv-show-active');
+              } else {
+                setRightCollapsed(!rightCollapsed);
+              }
+            }}
+            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200 shadow-sm"
+          >
+            <PanelRight size={16} className={(rightCollapsed && !learningMode && !assetMode) ? "opacity-50" : "opacity-100"} />
+          </button>
+        </div>
       </div>
 
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
+        learningMode={learningMode}
+        assetMode={assetMode}
         left={
           <Sidebar
             onRunPlugin={handleRunPlugin}
@@ -552,7 +575,16 @@ function App() {
               setIsSubtitleDialogOpen(true);
             }}
             onCaptureScreenshot={handleCaptureScreenshot}
-            onOpenEnglishLearning={() => { setShowEnglishLearning(true); if (rightCollapsed) setRightCollapsed(false); }}
+            onOpenEnglishLearning={() => {
+              setLearningMode(true);
+              setAssetMode(false);
+              ipcRenderer.invoke('wcv-hide-all');
+            }}
+            onOpenAssetPanel={() => {
+              setAssetMode(true);
+              setLearningMode(false);
+              ipcRenderer.invoke('wcv-hide-all');
+            }}
             inputUrl={navState.inputUrl}
             onInputUrlChange={handleInputUrlChange}
             onNavigate={handleNavigate}
@@ -597,6 +629,24 @@ function App() {
             showEnglishLearning={showEnglishLearning}
             onCloseEnglishLearning={() => setShowEnglishLearning(false)}
             subtitleMarks={subtitleMarks}
+          />
+        }
+        learning={
+          <LearningPanel
+            onClose={() => {
+              setLearningMode(false);
+              ipcRenderer.invoke('wcv-show-active');
+            }}
+          />
+        }
+        asset={
+          <AssetPanelFull
+            onClose={() => {
+              setAssetMode(false);
+              ipcRenderer.invoke('wcv-show-active');
+            }}
+            refreshTrigger={materialRefreshTrigger}
+            onEditScreenshot={handleEditScreenshot}
           />
         }
       />

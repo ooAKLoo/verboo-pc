@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Loader2, Globe, Camera, Star, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, Loader2, Globe, Camera, Star, AlertTriangle, Package } from 'lucide-react';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -103,6 +103,7 @@ interface SidebarProps {
     onOpenSubtitleDialog: () => void;
     onCaptureScreenshot: (markType?: MarkType) => void;
     onOpenEnglishLearning: () => void;
+    onOpenAssetPanel: () => void;
     // Navigation toolbar props
     inputUrl: string;
     onInputUrlChange: (url: string) => void;
@@ -126,6 +127,7 @@ export function Sidebar({
     onOpenSubtitleDialog,
     onCaptureScreenshot,
     onOpenEnglishLearning,
+    onOpenAssetPanel,
     inputUrl,
     onInputUrlChange,
     onNavigate,
@@ -263,6 +265,14 @@ export function Sidebar({
                 >
                     <span className="text-[13px] font-medium text-[#18181b]">英语学习</span>
                     <span className="text-[11px] text-[#a1a1aa] mt-0.5">分析字幕中的重点难点词汇</span>
+                </div>
+
+                <div
+                    onClick={onOpenAssetPanel}
+                    className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                >
+                    <Package size={14} className="text-gray-500" />
+                    <span className="text-[13px] font-medium text-[#18181b]">素材库</span>
                 </div>
             </div>
 

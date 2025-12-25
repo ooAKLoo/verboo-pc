@@ -5,13 +5,17 @@ interface LayoutProps {
     left: ReactNode;
     main: ReactNode;
     right: ReactNode;
+    learning?: ReactNode;
+    asset?: ReactNode;
     leftCollapsed: boolean;
     rightCollapsed: boolean;
+    learningMode?: boolean;
+    assetMode?: boolean;
 }
 
 const MIN_RIGHT_WIDTH = 100;
 
-export function Layout({ left, main, right, leftCollapsed, rightCollapsed }: LayoutProps) {
+export function Layout({ left, main, right, learning, asset, leftCollapsed, rightCollapsed, learningMode, assetMode }: LayoutProps) {
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizing, setIsResizing] = useState(false);
     const lastXRef = useRef(0);
@@ -55,7 +59,7 @@ export function Layout({ left, main, right, leftCollapsed, rightCollapsed }: Lay
     }, [isResizing]);
 
     return (
-        <div className="flex h-screen w-screen overflow-hidden p-3" style={{ backgroundColor: '#f5f5f5' }}>
+        <div className="flex w-screen overflow-hidden p-3 pt-[52px]" style={{ backgroundColor: '#f5f5f5', height: '100vh' }}>
             {/* Left Sidebar - Floating Card */}
             <div
                 className={`transition-all duration-300 ease-in-out floating-card overflow-hidden ${leftCollapsed ? 'w-0 opacity-0 p-0 mr-0' : 'w-64 opacity-100 mr-3'
@@ -64,35 +68,48 @@ export function Layout({ left, main, right, leftCollapsed, rightCollapsed }: Lay
                 {left}
             </div>
 
-            {/* Main Content - Floating Card */}
-            <div className="flex-1 flex flex-col min-w-0 relative floating-card bg-dot-grid overflow-hidden">
-                {main}
-            </div>
-
-            {/* Resizer - iPad 风格拖拽条，宽度等于 gap 宽度 */}
-            {!rightCollapsed && (
-                <div
-                    className="flex items-center justify-center flex-shrink-0 cursor-col-resize group w-3 mx-0"
-                    onMouseDown={handleMouseDown}
-                >
-                    {/* 可视拖拽手柄 */}
-                    <div
-                        className={`w-1 rounded-full transition-all duration-200 ease-out ${isResizing
-                            ? 'h-16 bg-gray-500'
-                            : 'h-8 bg-gray-300 group-hover:h-12 group-hover:bg-gray-500'
-                            }`}
-                    />
+            {/* Learning Mode - Full width panel replacing main + right */}
+            {learningMode ? (
+                <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
+                    {learning}
                 </div>
-            )}
+            ) : assetMode ? (
+                <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
+                    {asset}
+                </div>
+            ) : (
+                <>
+                    {/* Main Content - Floating Card */}
+                    <div className="flex-1 flex flex-col min-w-0 relative floating-card bg-dot-grid overflow-hidden">
+                        {main}
+                    </div>
 
-            {/* Right Sidebar - Floating Card */}
-            <div
-                className={`transition-opacity duration-300 ease-in-out floating-card z-20 overflow-hidden ${rightCollapsed ? 'w-0 opacity-0 p-0' : 'opacity-100'
-                    }`}
-                style={{ width: rightCollapsed ? 0 : `${rightWidth}px` }}
-            >
-                {right}
-            </div>
+                    {/* Resizer - iPad 风格拖拽条，宽度等于 gap 宽度 */}
+                    {!rightCollapsed && (
+                        <div
+                            className="flex items-center justify-center flex-shrink-0 cursor-col-resize group w-3 mx-0"
+                            onMouseDown={handleMouseDown}
+                        >
+                            {/* 可视拖拽手柄 */}
+                            <div
+                                className={`w-1 rounded-full transition-all duration-200 ease-out ${isResizing
+                                    ? 'h-16 bg-gray-500'
+                                    : 'h-8 bg-gray-300 group-hover:h-12 group-hover:bg-gray-500'
+                                    }`}
+                            />
+                        </div>
+                    )}
+
+                    {/* Right Sidebar - Floating Card */}
+                    <div
+                        className={`transition-opacity duration-300 ease-in-out floating-card z-20 overflow-hidden ${rightCollapsed ? 'w-0 opacity-0 p-0' : 'opacity-100'
+                            }`}
+                        style={{ width: rightCollapsed ? 0 : `${rightWidth}px` }}
+                    >
+                        {right}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

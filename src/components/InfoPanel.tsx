@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { AssetPanel } from './AssetPanel';
 import type { Asset } from './AssetCard';
-import { EnglishLearning } from './EnglishLearning';
-import { FileText, Package, SearchX, FileX, Sparkles, BookOpen, Star, AlertTriangle } from 'lucide-react';
+import { FileText, SearchX, FileX, Sparkles, Star, AlertTriangle } from 'lucide-react';
 
 // Mark type for subtitles
 type MarkType = 'important' | 'difficult';
@@ -24,18 +22,8 @@ interface InfoPanelProps {
     subtitleMarks?: SubtitleMark[];
 }
 
-type TabType = 'subtitles' | 'assets' | 'learning';
-
-export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot, showEnglishLearning = false, onCloseEnglishLearning, subtitleMarks = [] }: InfoPanelProps) {
-    const [activeTab, setActiveTab] = useState<TabType>('subtitles');
+export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [] }: InfoPanelProps) {
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Switch to learning tab when showEnglishLearning changes
-    useEffect(() => {
-        if (showEnglishLearning) {
-            setActiveTab('learning');
-        }
-    }, [showEnglishLearning]);
     const [autoScroll, setAutoScroll] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
@@ -152,229 +140,180 @@ ${subtitleText}
         }
     };
 
-    const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-        { id: 'subtitles', label: '字幕', icon: FileText },
-        { id: 'assets', label: '素材库', icon: Package },
-        { id: 'learning', label: '学习', icon: BookOpen },
-    ];
-
     return (
         <div className="h-full flex flex-col font-sans bg-white text-primary">
-            {/* Tab Navigation - Linear Style */}
-            <div className="px-4 pt-4 pb-3">
-                <div className="relative flex p-0.5 bg-[#f4f4f5] rounded-lg">
-                    {/* Sliding indicator */}
-                    <div
-                        className="absolute top-0.5 bottom-0.5 rounded-md bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-200 ease-out"
-                        style={{
-                            width: `calc(${100 / tabs.length}% - 2px)`,
-                            left: activeTab === 'subtitles' ? '2px' : activeTab === 'assets' ? `calc(${100 / tabs.length}%)` : `calc(${200 / tabs.length}%)`,
-                        }}
-                    />
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`relative z-10 flex-1 px-3 py-1.5 text-[13px] font-medium rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 ${
-                                activeTab === tab.id
-                                    ? 'text-[#18181b]'
-                                    : 'text-[#71717a] hover:text-[#3f3f46]'
-                            }`}
-                        >
-                            <tab.icon size={14} strokeWidth={1.75} />
-                            <span>{tab.label}</span>
-                        </button>
-                    ))}
+            {/* Header */}
+            <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-gray-400" />
+                    <span className="text-[14px] font-medium text-gray-900">字幕</span>
                 </div>
             </div>
 
-            {/* Assets Tab */}
-            {activeTab === 'assets' && (
-                <AssetPanel
-                    refreshTrigger={materialRefreshTrigger}
-                    onEditScreenshot={onEditScreenshot}
-                />
-            )}
-
-            {/* Learning Tab */}
-            {activeTab === 'learning' && (
-                <EnglishLearning
-                    onBack={() => {
-                        setActiveTab('subtitles');
-                        onCloseEnglishLearning?.();
-                    }}
-                />
-            )}
-
-            {/* Subtitles Tab */}
-            {activeTab === 'subtitles' && (
-                <>
-                    {/* Toolbar - Linear Style */}
-                    <div className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                            {/* Search Input */}
-                            {Array.isArray(data) && data.length > 0 && (
-                                <div className="flex-1 relative">
-                                    <input
-                                        type="text"
-                                        placeholder="搜索字幕..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
-                                    />
-                                </div>
-                            )}
-                            {/* Action Buttons */}
-                            <div className="flex items-center gap-1">
-                                {Array.isArray(data) && data.length > 0 && (
-                                    <>
-                                        <button
-                                            onClick={copyToPrompt}
-                                            className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
-                                                copySuccess
-                                                    ? 'text-green-600 bg-green-50'
-                                                    : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
-                                            }`}
-                                            title="复制字幕到英语学习Prompt"
-                                        >
-                                            <Sparkles size={12} />
-                                            {copySuccess ? '已复制' : 'AI学习'}
-                                        </button>
-                                        <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
-                                    </>
-                                )}
+            {/* Toolbar - Linear Style */}
+            <div className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                    {/* Search Input */}
+                    {Array.isArray(data) && data.length > 0 && (
+                        <div className="flex-1 relative">
+                            <input
+                                type="text"
+                                placeholder="搜索字幕..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
+                            />
+                        </div>
+                    )}
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-1">
+                        {Array.isArray(data) && data.length > 0 && (
+                            <>
                                 <button
-                                    onClick={() => setAutoScroll(!autoScroll)}
-                                    className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
-                                        autoScroll
-                                            ? 'text-[#18181b] bg-[#f4f4f5]'
-                                            : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
+                                    onClick={copyToPrompt}
+                                    className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
+                                        copySuccess
+                                            ? 'text-green-600 bg-green-50'
+                                            : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
+                                    }`}
+                                    title="复制字幕到英语学习Prompt"
+                                >
+                                    <Sparkles size={12} />
+                                    {copySuccess ? '已复制' : 'AI学习'}
+                                </button>
+                                <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
+                            </>
+                        )}
+                        <button
+                            onClick={() => setAutoScroll(!autoScroll)}
+                            className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
+                                autoScroll
+                                    ? 'text-[#18181b] bg-[#f4f4f5]'
+                                    : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
+                            }`}
+                        >
+                            {autoScroll ? '自动' : '手动'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Subtitle List - Linear Style */}
+            <div ref={scrollRef} className="flex-1 overflow-auto">
+                {Array.isArray(filteredData) && filteredData.length > 0 ? (
+                    <div className="pb-6">
+                        {filteredData.map((item, index) => {
+                            const isCurrent = item.start !== undefined &&
+                                currentVideoTime > 0 &&
+                                item.start <= currentVideoTime &&
+                                (filteredData[index + 1]?.start === undefined || currentVideoTime < filteredData[index + 1].start);
+
+                            // Check if this subtitle has a mark
+                            const mark = item.start !== undefined ? getSubtitleMark(item.start, item.duration) : null;
+
+                            return (
+                                <div
+                                    key={index}
+                                    ref={(el) => { itemRefs.current[index] = el; }}
+                                    className={`group px-4 py-2.5 transition-all duration-200 cursor-default ${
+                                        mark === 'important'
+                                            ? 'bg-amber-50/70 border-l-2 border-amber-400'
+                                            : mark === 'difficult'
+                                            ? 'bg-red-50/70 border-l-2 border-red-400'
+                                            : isCurrent
+                                            ? 'bg-[#fafafa]'
+                                            : 'hover:bg-[#fafafa]/50'
                                     }`}
                                 >
-                                    {autoScroll ? '自动' : '手动'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Subtitle List - Linear Style */}
-                    <div ref={scrollRef} className="flex-1 overflow-auto">
-                        {Array.isArray(filteredData) && filteredData.length > 0 ? (
-                            <div className="pb-6">
-                                {filteredData.map((item, index) => {
-                                    const isCurrent = item.start !== undefined &&
-                                        currentVideoTime > 0 &&
-                                        item.start <= currentVideoTime &&
-                                        (filteredData[index + 1]?.start === undefined || currentVideoTime < filteredData[index + 1].start);
-
-                                    // Check if this subtitle has a mark
-                                    const mark = item.start !== undefined ? getSubtitleMark(item.start, item.duration) : null;
-
-                                    return (
-                                        <div
-                                            key={index}
-                                            ref={(el) => { itemRefs.current[index] = el; }}
-                                            className={`group px-4 py-2.5 transition-all duration-200 cursor-default ${
-                                                mark === 'important'
-                                                    ? 'bg-amber-50/70 border-l-2 border-amber-400'
-                                                    : mark === 'difficult'
-                                                    ? 'bg-red-50/70 border-l-2 border-red-400'
-                                                    : isCurrent
-                                                    ? 'bg-[#fafafa]'
-                                                    : 'hover:bg-[#fafafa]/50'
-                                            }`}
-                                        >
-                                            {item.start !== undefined ? (
-                                                <div className="flex gap-3 items-start">
-                                                    {/* Mark Icon */}
-                                                    {mark && (
-                                                        <div className="pt-0.5">
-                                                            {mark === 'important' ? (
-                                                                <Star size={12} className="text-amber-500 fill-amber-500" />
-                                                            ) : (
-                                                                <AlertTriangle size={12} className="text-red-500" />
-                                                            )}
-                                                        </div>
+                                    {item.start !== undefined ? (
+                                        <div className="flex gap-3 items-start">
+                                            {/* Mark Icon */}
+                                            {mark && (
+                                                <div className="pt-0.5">
+                                                    {mark === 'important' ? (
+                                                        <Star size={12} className="text-amber-500 fill-amber-500" />
+                                                    ) : (
+                                                        <AlertTriangle size={12} className="text-red-500" />
                                                     )}
-                                                    {/* Timestamp */}
-                                                    <div className={`text-[11px] font-mono tabular-nums min-w-[42px] pt-0.5 transition-colors duration-200 ${
-                                                        isCurrent ? 'text-[#18181b]' : 'text-[#a1a1aa] group-hover:text-[#71717a]'
+                                                </div>
+                                            )}
+                                            {/* Timestamp */}
+                                            <div className={`text-[11px] font-mono tabular-nums min-w-[42px] pt-0.5 transition-colors duration-200 ${
+                                                isCurrent ? 'text-[#18181b]' : 'text-[#a1a1aa] group-hover:text-[#71717a]'
+                                            }`}>
+                                                {formatTime(item.start)}
+                                            </div>
+                                            {/* Content */}
+                                            <div className="flex-1 space-y-1">
+                                                <div className={`text-[13px] leading-[1.6] transition-colors duration-200 ${
+                                                    isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
+                                                }`}>
+                                                    {searchTerm ? (
+                                                        <span dangerouslySetInnerHTML={{
+                                                            __html: (item.text || '').replace(
+                                                                new RegExp(searchTerm, 'gi'),
+                                                                (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
+                                                            )
+                                                        }} />
+                                                    ) : (
+                                                        item.text
+                                                    )}
+                                                </div>
+                                                {item.translation && (
+                                                    <div className={`text-[12px] leading-[1.5] transition-colors duration-200 ${
+                                                        isCurrent ? 'text-[#71717a]' : 'text-[#a1a1aa]'
                                                     }`}>
-                                                        {formatTime(item.start)}
-                                                    </div>
-                                                    {/* Content */}
-                                                    <div className="flex-1 space-y-1">
-                                                        <div className={`text-[13px] leading-[1.6] transition-colors duration-200 ${
-                                                            isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
-                                                        }`}>
-                                                            {searchTerm ? (
-                                                                <span dangerouslySetInnerHTML={{
-                                                                    __html: (item.text || '').replace(
-                                                                        new RegExp(searchTerm, 'gi'),
-                                                                        (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
-                                                                    )
-                                                                }} />
-                                                            ) : (
-                                                                item.text
-                                                            )}
-                                                        </div>
-                                                        {item.translation && (
-                                                            <div className={`text-[12px] leading-[1.5] transition-colors duration-200 ${
-                                                                isCurrent ? 'text-[#71717a]' : 'text-[#a1a1aa]'
-                                                            }`}>
-                                                                {searchTerm ? (
-                                                                    <span dangerouslySetInnerHTML={{
-                                                                        __html: (item.translation || '').replace(
-                                                                            new RegExp(searchTerm, 'gi'),
-                                                                            (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
-                                                                        )
-                                                                    }} />
-                                                                ) : (
-                                                                    item.translation
-                                                                )}
-                                                            </div>
+                                                        {searchTerm ? (
+                                                            <span dangerouslySetInnerHTML={{
+                                                                __html: (item.translation || '').replace(
+                                                                    new RegExp(searchTerm, 'gi'),
+                                                                    (match: string) => `<mark class="bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm">${match}</mark>`
+                                                                )
+                                                            }} />
+                                                        ) : (
+                                                            item.translation
                                                         )}
                                                     </div>
-                                                </div>
-                                            ) : item.type === 'subtitle' ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="text-[10px] text-[#a1a1aa] uppercase tracking-wider font-medium">{item.platform}</div>
-                                                    <div className={`text-[13px] leading-[1.6] ${
-                                                        isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
-                                                    }`}>{item.text}</div>
-                                                </div>
-                                            ) : (
-                                                <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
-                                                    {JSON.stringify(item, null, 2)}
-                                                </pre>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        ) : Array.isArray(data) && data.length > 0 && searchTerm ? (
-                            <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
-                                <SearchX size={20} strokeWidth={1.5} className="text-[#d4d4d8]" />
-                                <span className="text-[13px] text-[#a1a1aa]">未找到匹配的字幕</span>
-                            </div>
-                        ) : data ? (
-                            <div className="p-4">
-                                <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
-                                    {JSON.stringify(data, null, 2)}
-                                </pre>
-                            </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center gap-3">
-                                <FileX size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
-                                <div className="text-center">
-                                    <div className="text-[13px] font-medium text-[#71717a] mb-1">等待字幕数据</div>
-                                    <div className="text-[12px] text-[#a1a1aa]">点击左侧插件提取字幕</div>
+                                    ) : item.type === 'subtitle' ? (
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-[10px] text-[#a1a1aa] uppercase tracking-wider font-medium">{item.platform}</div>
+                                            <div className={`text-[13px] leading-[1.6] ${
+                                                isCurrent ? 'text-[#18181b]' : 'text-[#52525b]'
+                                            }`}>{item.text}</div>
+                                        </div>
+                                    ) : (
+                                        <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
+                                            {JSON.stringify(item, null, 2)}
+                                        </pre>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })}
                     </div>
-                </>
-            )}
+                ) : Array.isArray(data) && data.length > 0 && searchTerm ? (
+                    <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
+                        <SearchX size={20} strokeWidth={1.5} className="text-[#d4d4d8]" />
+                        <span className="text-[13px] text-[#a1a1aa]">未找到匹配的字幕</span>
+                    </div>
+                ) : data ? (
+                    <div className="p-4">
+                        <pre className="text-[11px] text-[#71717a] whitespace-pre-wrap break-all font-mono">
+                            {JSON.stringify(data, null, 2)}
+                        </pre>
+                    </div>
+                ) : (
+                    <div className="h-full flex flex-col items-center justify-center gap-3">
+                        <FileX size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
+                        <div className="text-center">
+                            <div className="text-[13px] font-medium text-[#71717a] mb-1">等待字幕数据</div>
+                            <div className="text-[12px] text-[#a1a1aa]">点击左侧插件提取字幕</div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
