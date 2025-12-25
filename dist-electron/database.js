@@ -172,6 +172,7 @@ function saveScreenshot(input) {
         timestamp: input.timestamp,
         imageData: input.imageData,
         finalImageData: input.finalImageData,
+        markType: input.markType,
         selectedSubtitles: input.selectedSubtitles,
         subtitleStyle: input.subtitleStyle,
     };

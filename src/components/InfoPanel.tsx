@@ -2,7 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { AssetPanel } from './AssetPanel';
 import type { Asset } from './AssetCard';
 import { EnglishLearning } from './EnglishLearning';
-import { FileText, Package, SearchX, FileX, Sparkles, BookOpen } from 'lucide-react';
+import { FileText, Package, SearchX, FileX, Sparkles, BookOpen, Star, AlertTriangle } from 'lucide-react';
+
+// Mark type for subtitles
+type MarkType = 'important' | 'difficult';
+
+// Marked subtitle info
+interface SubtitleMark {
+    timestamp: number; // The timestamp when mark was created
+    markType: MarkType;
+}
 
 interface InfoPanelProps {
     data: any;
@@ -11,11 +20,13 @@ interface InfoPanelProps {
     onEditScreenshot?: (asset: Asset) => void;
     showEnglishLearning?: boolean;
     onCloseEnglishLearning?: () => void;
+    // New: marks from captures
+    subtitleMarks?: SubtitleMark[];
 }
 
 type TabType = 'subtitles' | 'assets' | 'learning';
 
-export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot, showEnglishLearning = false, onCloseEnglishLearning }: InfoPanelProps) {
+export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger = 0, onEditScreenshot, showEnglishLearning = false, onCloseEnglishLearning, subtitleMarks = [] }: InfoPanelProps) {
     const [activeTab, setActiveTab] = useState<TabType>('subtitles');
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -77,55 +88,15 @@ export function InfoPanel({ data, currentVideoTime = 0, materialRefreshTrigger =
         return `${mins}:${String(secs).padStart(2, '0')}`;
     };
 
-    // Export subtitles as text
-    const exportAsText = () => {
-        if (!Array.isArray(data) || data.length === 0) return;
-
-        const text = data.map(item => {
-            if (item.start !== undefined) {
-                return `[${formatTime(item.start)}] ${item.text}`;
+    // Check if a subtitle has marks (based on timestamp overlap)
+    const getSubtitleMark = (subtitleStart: number, subtitleDuration: number = 0): MarkType | null => {
+        const subtitleEnd = subtitleStart + (subtitleDuration || 3); // Default 3 seconds if no duration
+        for (const mark of subtitleMarks) {
+            if (mark.timestamp >= subtitleStart && mark.timestamp <= subtitleEnd) {
+                return mark.markType;
             }
-            return item.text || JSON.stringify(item);
-        }).join('\n\n');
-
-        const blob = new Blob([text], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `subtitle_${new Date().toISOString().slice(0, 10)}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    // Export subtitles as SRT
-    const exportAsSRT = () => {
-        if (!Array.isArray(data) || data.length === 0) return;
-
-        const srt = data.map((item, index) => {
-            if (item.start !== undefined) {
-                const start = formatSRTTime(item.start);
-                const end = formatSRTTime(item.start + (item.duration || 2));
-                return `${index + 1}\n${start} --> ${end}\n${item.text}\n`;
-            }
-            return '';
-        }).filter(Boolean).join('\n');
-
-        const blob = new Blob([srt], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `subtitle_${new Date().toISOString().slice(0, 10)}.srt`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    // Format time for SRT (HH:MM:SS,mmm)
-    const formatSRTTime = (seconds: number) => {
-        const hrs = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        const secs = Math.floor(seconds % 60);
-        const ms = Math.floor((seconds % 1) * 1000);
-        return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+        }
+        return null;
     };
 
     // Copy subtitles to English Learning Prompt template
@@ -258,21 +229,6 @@ ${subtitleText}
                                 {Array.isArray(data) && data.length > 0 && (
                                     <>
                                         <button
-                                            onClick={exportAsText}
-                                            className="h-8 px-2.5 text-[12px] font-medium text-[#52525b] bg-transparent hover:bg-[#f4f4f5] rounded-md transition-colors duration-150"
-                                            title="导出为文本"
-                                        >
-                                            TXT
-                                        </button>
-                                        <button
-                                            onClick={exportAsSRT}
-                                            className="h-8 px-2.5 text-[12px] font-medium text-[#52525b] bg-transparent hover:bg-[#f4f4f5] rounded-md transition-colors duration-150"
-                                            title="导出为SRT字幕"
-                                        >
-                                            SRT
-                                        </button>
-                                        <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
-                                        <button
                                             onClick={copyToPrompt}
                                             className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
                                                 copySuccess
@@ -311,18 +267,35 @@ ${subtitleText}
                                         item.start <= currentVideoTime &&
                                         (filteredData[index + 1]?.start === undefined || currentVideoTime < filteredData[index + 1].start);
 
+                                    // Check if this subtitle has a mark
+                                    const mark = item.start !== undefined ? getSubtitleMark(item.start, item.duration) : null;
+
                                     return (
                                         <div
                                             key={index}
                                             ref={(el) => { itemRefs.current[index] = el; }}
                                             className={`group px-4 py-2.5 transition-all duration-200 cursor-default ${
-                                                isCurrent
+                                                mark === 'important'
+                                                    ? 'bg-amber-50/70 border-l-2 border-amber-400'
+                                                    : mark === 'difficult'
+                                                    ? 'bg-red-50/70 border-l-2 border-red-400'
+                                                    : isCurrent
                                                     ? 'bg-[#fafafa]'
                                                     : 'hover:bg-[#fafafa]/50'
                                             }`}
                                         >
                                             {item.start !== undefined ? (
                                                 <div className="flex gap-3 items-start">
+                                                    {/* Mark Icon */}
+                                                    {mark && (
+                                                        <div className="pt-0.5">
+                                                            {mark === 'important' ? (
+                                                                <Star size={12} className="text-amber-500 fill-amber-500" />
+                                                            ) : (
+                                                                <AlertTriangle size={12} className="text-red-500" />
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     {/* Timestamp */}
                                                     <div className={`text-[11px] font-mono tabular-nums min-w-[42px] pt-0.5 transition-colors duration-200 ${
                                                         isCurrent ? 'text-[#18181b]' : 'text-[#a1a1aa] group-hover:text-[#71717a]'

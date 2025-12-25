@@ -54,6 +54,7 @@ export interface ScreenshotTypeData {
     timestamp: number;
     imageData: string;
     finalImageData?: string;
+    markType?: 'important' | 'difficult';
     selectedSubtitles?: Array<{
         start: number;
         end: number;
@@ -118,6 +119,7 @@ export interface SaveScreenshotInput {
     timestamp: number;
     imageData: string;
     finalImageData?: string;
+    markType?: 'important' | 'difficult';
     selectedSubtitles?: Array<{
         start: number;
         end: number;
@@ -326,6 +328,7 @@ export function saveScreenshot(input: SaveScreenshotInput): Asset {
         timestamp: input.timestamp,
         imageData: input.imageData,
         finalImageData: input.finalImageData,
+        markType: input.markType,
         selectedSubtitles: input.selectedSubtitles,
         subtitleStyle: input.subtitleStyle,
     };

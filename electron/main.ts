@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, ipcMain, Menu, MenuItem } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
 import path from 'path';
 import { getYouTubeSubtitles } from './youtube-service';
 import {
@@ -62,20 +62,227 @@ function getChromeUserAgent(): string {
 // Export for use in renderer
 export const CHROME_USER_AGENT = getChromeUserAgent();
 
+// ============ WebContentsView Manager ============
+
+// Store active WebContentsViews by tabId
+const webContentsViews = new Map<string, WebContentsView>();
+let mainWindow: BrowserWindow | null = null;
+
+// Current active tab for positioning
+let activeTabId: string | null = null;
+
+// View bounds (will be updated by renderer)
+let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
+
+/**
+ * Create a new WebContentsView for a tab
+ */
+function createWebContentsView(tabId: string, url: string): void {
+    if (!mainWindow) return;
+
+    // Remove existing view if any
+    if (webContentsViews.has(tabId)) {
+        destroyWebContentsView(tabId);
+    }
+
+    const userAgent = getChromeUserAgent();
+
+    const view = new WebContentsView({
+        webPreferences: {
+            preload: path.join(__dirname, 'webview-preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            webSecurity: true,
+        }
+    });
+
+    // Set user agent
+    view.webContents.setUserAgent(userAgent);
+
+    // Add to window's content view
+    mainWindow.contentView.addChildView(view);
+
+    // Set bounds
+    view.setBounds(viewBounds);
+
+    // Set border radius (Electron 33+ feature)
+    if (typeof view.setBorderRadius === 'function') {
+        view.setBorderRadius(0);
+    }
+
+    // Navigate to URL
+    view.webContents.loadURL(url);
+
+    // Store reference
+    webContentsViews.set(tabId, view);
+
+    // If no active tab yet, set this as active
+    if (!activeTabId) {
+        activeTabId = tabId;
+    }
+
+    // Show only if this is the active tab
+    if (tabId === activeTabId) {
+        view.setVisible(true);
+    } else {
+        view.setVisible(false);
+    }
+
+    // Setup event handlers
+    setupViewEventHandlers(tabId, view);
+
+    console.log('[Main] WebContentsView created for tab:', tabId);
+}
+
+/**
+ * Setup event handlers for a WebContentsView
+ */
+function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
+    const webContents = view.webContents;
+
+    // Navigation events
+    webContents.on('did-start-loading', () => {
+        mainWindow?.webContents.send('wcv-did-start-loading', tabId);
+    });
+
+    webContents.on('did-stop-loading', () => {
+        mainWindow?.webContents.send('wcv-did-stop-loading', tabId);
+    });
+
+    webContents.on('did-navigate', (event, url) => {
+        mainWindow?.webContents.send('wcv-did-navigate', tabId, url);
+    });
+
+    webContents.on('did-navigate-in-page', (event, url) => {
+        mainWindow?.webContents.send('wcv-did-navigate-in-page', tabId, url);
+    });
+
+    webContents.on('page-title-updated', (event, title) => {
+        mainWindow?.webContents.send('wcv-page-title-updated', tabId, title);
+    });
+
+    // IPC from preload script
+    webContents.ipc.on('plugin-data', (event, data) => {
+        mainWindow?.webContents.send('wcv-ipc-message', tabId, 'plugin-data', data);
+    });
+
+    webContents.ipc.on('bilibili-ai-subtitle', (event, data) => {
+        mainWindow?.webContents.send('wcv-ipc-message', tabId, 'bilibili-ai-subtitle', data);
+    });
+
+    webContents.ipc.on('video-time-update', (event, data) => {
+        mainWindow?.webContents.send('wcv-ipc-message', tabId, 'video-time-update', data);
+    });
+
+    webContents.ipc.on('show-context-menu', (event, data) => {
+        const { x, y, canCapture, platform } = data;
+        console.log('[Main] Context menu requested:', { canCapture, platform });
+
+        const menu = new Menu();
+
+        if (canCapture) {
+            menu.append(new MenuItem({
+                label: '📥 保存素材',
+                click: () => {
+                    webContents.send('execute-capture');
+                }
+            }));
+            menu.append(new MenuItem({ type: 'separator' }));
+        }
+
+        menu.append(new MenuItem({
+            label: '在新标签页中打开链接',
+            enabled: false,
+        }));
+
+        if (mainWindow) {
+            menu.popup({ window: mainWindow, x, y });
+        }
+    });
+
+    webContents.ipc.on('capture-result', (event, result) => {
+        console.log('[Main] Capture result received:', result);
+        if (result && !result.error) {
+            try {
+                const contentData = {
+                    platform: result.platform,
+                    title: result.title,
+                    url: result.originalUrl,
+                    author: result.author,
+                    content: result.content,
+                    tags: result.tags || [],
+                    images: result.images || [],
+                    capturedAt: result.capturedAt,
+                };
+                const asset = saveContent(contentData as any);
+                console.log('[Main] Content saved:', asset.id);
+                mainWindow?.webContents.send('wcv-ipc-message', tabId, 'material-saved', asset);
+            } catch (err: any) {
+                console.error('[Main] Save failed:', err);
+            }
+        }
+    });
+
+    webContents.ipc.on('video-capture-result', (event, result) => {
+        mainWindow?.webContents.send('wcv-video-capture-result', tabId, result);
+    });
+}
+
+/**
+ * Destroy a WebContentsView
+ */
+function destroyWebContentsView(tabId: string): void {
+    const view = webContentsViews.get(tabId);
+    if (view && mainWindow) {
+        mainWindow.contentView.removeChildView(view);
+        // WebContentsView doesn't have destroy(), just remove reference
+        webContentsViews.delete(tabId);
+        console.log('[Main] WebContentsView destroyed for tab:', tabId);
+    }
+}
+
+/**
+ * Switch active tab
+ */
+function switchActiveTab(tabId: string): void {
+    activeTabId = tabId;
+
+    // Hide all views except the active one
+    for (const [id, view] of webContentsViews) {
+        view.setVisible(id === tabId);
+    }
+}
+
+/**
+ * Update view bounds
+ */
+function updateViewBounds(bounds: { x: number; y: number; width: number; height: number }): void {
+    viewBounds = bounds;
+
+    // Update all views' bounds
+    for (const view of webContentsViews.values()) {
+        view.setBounds(bounds);
+    }
+}
+
 function createWindow() {
     const userAgent = getChromeUserAgent();
 
-    const mainWindow = new BrowserWindow({
+    const win = new BrowserWindow({
         width: 1200,
         height: 800,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: true,
             contextIsolation: false,
-            webviewTag: true,
+            webviewTag: false, // No longer using webview tag
             webSecurity: true,
         },
     });
+
+    // Store reference for WebContentsView management
+    mainWindow = win;
 
     // Set User-Agent for webview session to avoid Electron detection
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -91,7 +298,7 @@ function createWindow() {
     session.defaultSession.setUserAgent(userAgent);
 
     // Handle certificate errors for webview
-    mainWindow.webContents.session.setCertificateVerifyProc((request, callback) => {
+    win.webContents.session.setCertificateVerifyProc((request, callback) => {
         if (process.env.VITE_DEV_SERVER_URL) {
             callback(0);
         } else {
@@ -100,11 +307,19 @@ function createWindow() {
     });
 
     if (process.env.VITE_DEV_SERVER_URL) {
-        mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL!);
-        mainWindow.webContents.openDevTools();
+        win.loadURL(process.env.VITE_DEV_SERVER_URL!);
+        win.webContents.openDevTools();
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        win.loadFile(path.join(__dirname, '../dist/index.html'));
     }
+
+    // Clean up views when window is closed
+    win.on('closed', () => {
+        for (const tabId of webContentsViews.keys()) {
+            destroyWebContentsView(tabId);
+        }
+        mainWindow = null;
+    });
 }
 
 app.whenReady().then(() => {
@@ -130,6 +345,212 @@ app.whenReady().then(() => {
  */
 function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
+
+    // ============ WebContentsView IPC Handlers ============
+
+    // Create a new WebContentsView for a tab
+    ipcMain.handle('wcv-create', async (event, tabId: string, url: string) => {
+        try {
+            createWebContentsView(tabId, url);
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-create failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Destroy a WebContentsView
+    ipcMain.handle('wcv-destroy', async (event, tabId: string) => {
+        try {
+            destroyWebContentsView(tabId);
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-destroy failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Switch active tab
+    ipcMain.handle('wcv-switch-tab', async (event, tabId: string) => {
+        try {
+            switchActiveTab(tabId);
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-switch-tab failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Update view bounds
+    ipcMain.handle('wcv-update-bounds', async (event, bounds: { x: number; y: number; width: number; height: number }) => {
+        try {
+            updateViewBounds(bounds);
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-update-bounds failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Navigate to URL
+    ipcMain.handle('wcv-navigate', async (event, tabId: string, url: string) => {
+        try {
+            console.log('[IPC] wcv-navigate called:', tabId, url);
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                let finalUrl = url;
+                if (!finalUrl.startsWith('http')) {
+                    finalUrl = 'https://' + finalUrl;
+                }
+                console.log('[IPC] Loading URL:', finalUrl);
+                view.webContents.loadURL(finalUrl);
+                return { success: true };
+            }
+            console.log('[IPC] View not found for tab:', tabId, 'Available tabs:', Array.from(webContentsViews.keys()));
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-navigate failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Go back
+    ipcMain.handle('wcv-go-back', async (event, tabId: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view && view.webContents.canGoBack()) {
+                view.webContents.goBack();
+                return { success: true };
+            }
+            return { success: false, error: 'Cannot go back' };
+        } catch (error) {
+            console.error('[IPC] wcv-go-back failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Go forward
+    ipcMain.handle('wcv-go-forward', async (event, tabId: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view && view.webContents.canGoForward()) {
+                view.webContents.goForward();
+                return { success: true };
+            }
+            return { success: false, error: 'Cannot go forward' };
+        } catch (error) {
+            console.error('[IPC] wcv-go-forward failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Reload
+    ipcMain.handle('wcv-reload', async (event, tabId: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                view.webContents.reload();
+                return { success: true };
+            }
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-reload failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get current URL
+    ipcMain.handle('wcv-get-url', async (event, tabId: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                return { success: true, url: view.webContents.getURL() };
+            }
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-get-url failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get navigation state
+    ipcMain.handle('wcv-get-nav-state', async (event, tabId: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                return {
+                    success: true,
+                    canGoBack: view.webContents.canGoBack(),
+                    canGoForward: view.webContents.canGoForward()
+                };
+            }
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-get-nav-state failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Execute JavaScript in view
+    ipcMain.handle('wcv-execute-script', async (event, tabId: string, script: string) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                const result = await view.webContents.executeJavaScript(script);
+                return { success: true, result };
+            }
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-execute-script failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Send message to view (for video capture, etc.)
+    ipcMain.handle('wcv-send', async (event, tabId: string, channel: string, ...args: any[]) => {
+        try {
+            const view = webContentsViews.get(tabId);
+            if (view) {
+                view.webContents.send(channel, ...args);
+                return { success: true };
+            }
+            return { success: false, error: 'View not found' };
+        } catch (error) {
+            console.error('[IPC] wcv-send failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Hide all views (for modals/dialogs)
+    ipcMain.handle('wcv-hide-all', async () => {
+        try {
+            for (const view of webContentsViews.values()) {
+                view.setVisible(false);
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-hide-all failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Show active view (restore after modal closes)
+    ipcMain.handle('wcv-show-active', async () => {
+        try {
+            if (activeTabId) {
+                const view = webContentsViews.get(activeTabId);
+                if (view) {
+                    view.setVisible(true);
+                }
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] wcv-show-active failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    console.log('[Main] WebContentsView IPC handlers registered');
 
     // Handle YouTube subtitle extraction
     ipcMain.handle('get-youtube-subtitles', async (event, url: string) => {
@@ -181,7 +602,7 @@ function setupIpcHandlers() {
     // Save screenshot asset
     ipcMain.handle('save-screenshot', async (event, data) => {
         try {
-            console.log('[IPC] save-screenshot called');
+            console.log('[IPC] save-screenshot called, markType:', data.markType);
             const asset = saveScreenshot({
                 platform: data.platform,
                 title: data.title || data.videoTitle || '',
@@ -191,6 +612,7 @@ function setupIpcHandlers() {
                 timestamp: data.timestamp,
                 imageData: data.imageData,
                 finalImageData: data.finalImageData,
+                markType: data.markType,
                 selectedSubtitles: data.subtitles || data.selectedSubtitles,
                 subtitleStyle: data.subtitleStyle,
                 subtitleId: data.subtitleId,
@@ -379,33 +801,6 @@ function setupIpcHandlers() {
     });
 
     console.log('[Main] Vocabulary IPC handlers registered successfully');
-
-    // ============ Context Menu Handler ============
-
-    // Show context menu for saving material
-    ipcMain.on('show-save-material-menu', (event, { x, y, canCapture }) => {
-        const menu = new Menu();
-
-        if (canCapture) {
-            menu.append(new MenuItem({
-                label: '📥 保存素材',
-                click: () => {
-                    event.sender.send('capture-material');
-                }
-            }));
-            menu.append(new MenuItem({ type: 'separator' }));
-        }
-
-        menu.append(new MenuItem({
-            label: '在新标签页中打开链接',
-            enabled: false, // Placeholder for future
-        }));
-
-        const window = BrowserWindow.fromWebContents(event.sender);
-        if (window) {
-            menu.popup({ window, x, y });
-        }
-    });
 }
 
 app.on('window-all-closed', () => {

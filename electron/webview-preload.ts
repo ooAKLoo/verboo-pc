@@ -1,13 +1,13 @@
 /**
- * Webview Preload Script
+ * Webview Preload Script (for WebContentsView with contextIsolation)
  *
  * This script runs in the webview context and provides:
  * - Anti-detection measures to avoid bot detection
  * - Platform adapter system for content/video capture
- * - IPC communication with the main process
+ * - IPC communication with the main process via contextBridge
  */
 
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, contextBridge } from 'electron';
 import { adapterRegistry, genericAdapter } from './adapters';
 import type { PlatformAdapter, VideoCaptureResult } from './adapters';
 
@@ -283,12 +283,13 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
 // ============ Expose API to Guest Page ============
 
 (function () {
-    console.log('[Verboo] webview-preload.js loaded');
+    console.log('[Verboo] webview-preload.js loaded (WebContentsView mode)');
 
-    window.verboo = {
+    // For WebContentsView with contextIsolation, use ipcRenderer.send instead of sendToHost
+    const verbooApi = {
         sendData: (data: any) => {
             console.log('[Verboo] Sending data to host', data);
-            ipcRenderer.sendToHost('plugin-data', data);
+            ipcRenderer.send('plugin-data', data);
         },
         captureContent: async () => {
             return captureContent();
@@ -298,12 +299,18 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
         }
     };
 
-    // Freeze the API
-    Object.defineProperty(window, 'verboo', {
-        value: window.verboo,
-        writable: false,
-        configurable: false
-    });
+    // Expose API via contextBridge for contextIsolation
+    try {
+        contextBridge.exposeInMainWorld('verboo', verbooApi);
+    } catch (e) {
+        // Fallback for non-isolated context
+        window.verboo = verbooApi;
+        Object.defineProperty(window, 'verboo', {
+            value: verbooApi,
+            writable: false,
+            configurable: false
+        });
+    }
 
     // ============ Context Menu Handler ============
     document.addEventListener('contextmenu', (e) => {
@@ -311,7 +318,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
         const adapter = getCurrentAdapter();
         console.log('[Verboo] Context menu triggered, platform:', adapter.platform.name);
 
-        ipcRenderer.sendToHost('show-context-menu', {
+        ipcRenderer.send('show-context-menu', {
             x: e.clientX,
             y: e.clientY,
             canCapture,
@@ -325,7 +332,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
     ipcRenderer.on('execute-capture', () => {
         console.log('[Verboo] Capture command received');
         const result = captureContent();
-        ipcRenderer.sendToHost('capture-result', result);
+        ipcRenderer.send('capture-result', result);
     });
 
     // Video frame capture command
@@ -333,9 +340,9 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
         console.log('[Verboo] Video capture command received');
         try {
             const result = await captureVideoFrame();
-            ipcRenderer.sendToHost('video-capture-result', result);
+            ipcRenderer.send('video-capture-result', result);
         } catch (error: any) {
-            ipcRenderer.sendToHost('video-capture-result', { error: error.error || error.message });
+            ipcRenderer.send('video-capture-result', { error: error.error || error.message });
         }
     });
 
@@ -357,7 +364,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
                 const subtitles = parseBilibiliAISubtitle(data);
                 if (subtitles && subtitles.length > 0) {
                     console.log('[Verboo] Captured AI subtitles:', subtitles.length, 'items');
-                    ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                    ipcRenderer.send('bilibili-ai-subtitle', {
                         type: 'bilibili-ai-subtitle',
                         data: subtitles,
                         count: subtitles.length
@@ -392,7 +399,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
                     const subtitles = parseBilibiliAISubtitle(data);
                     if (subtitles && subtitles.length > 0) {
                         console.log('[Verboo] Captured AI subtitles (XHR):', subtitles.length, 'items');
-                        ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                        ipcRenderer.send('bilibili-ai-subtitle', {
                             type: 'bilibili-ai-subtitle',
                             data: subtitles,
                             count: subtitles.length
@@ -439,7 +446,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
     }
 
     // ============ Video Time Monitoring ============
-    let videoTimeInterval: NodeJS.Timeout | null = null;
+    let videoTimeInterval: ReturnType<typeof setInterval> | null = null;
 
     function startVideoTimeMonitoring() {
         if (videoTimeInterval) return;
@@ -449,7 +456,7 @@ function captureVideoFrame(): Promise<VideoCaptureResult | { error: string }> {
             const videoElement = adapter.findVideoElement();
 
             if (videoElement && !videoElement.paused && videoElement.currentTime > 0) {
-                ipcRenderer.sendToHost('video-time-update', {
+                ipcRenderer.send('video-time-update', {
                     currentTime: videoElement.currentTime,
                     duration: videoElement.duration,
                     paused: videoElement.paused

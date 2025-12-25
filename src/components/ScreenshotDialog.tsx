@@ -31,6 +31,8 @@ export interface ScreenshotSaveData {
     avatar?: string;
     profileUrl?: string;
   };
+  // Mark type for important/difficult content
+  markType?: 'important' | 'difficult';
   subtitles?: Array<{
     start: number;
     end: number;

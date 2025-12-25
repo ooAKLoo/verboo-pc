@@ -1,11 +1,11 @@
 "use strict";
 /**
- * Webview Preload Script
+ * Webview Preload Script (for WebContentsView with contextIsolation)
  *
  * This script runs in the webview context and provides:
  * - Anti-detection measures to avoid bot detection
  * - Platform adapter system for content/video capture
- * - IPC communication with the main process
+ * - IPC communication with the main process via contextBridge
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
@@ -244,11 +244,12 @@ function captureVideoFrame() {
 }
 // ============ Expose API to Guest Page ============
 (function () {
-    console.log('[Verboo] webview-preload.js loaded');
-    window.verboo = {
+    console.log('[Verboo] webview-preload.js loaded (WebContentsView mode)');
+    // For WebContentsView with contextIsolation, use ipcRenderer.send instead of sendToHost
+    const verbooApi = {
         sendData: (data) => {
             console.log('[Verboo] Sending data to host', data);
-            electron_1.ipcRenderer.sendToHost('plugin-data', data);
+            electron_1.ipcRenderer.send('plugin-data', data);
         },
         captureContent: async () => {
             return captureContent();
@@ -257,18 +258,25 @@ function captureVideoFrame() {
             return captureVideoFrame();
         }
     };
-    // Freeze the API
-    Object.defineProperty(window, 'verboo', {
-        value: window.verboo,
-        writable: false,
-        configurable: false
-    });
+    // Expose API via contextBridge for contextIsolation
+    try {
+        electron_1.contextBridge.exposeInMainWorld('verboo', verbooApi);
+    }
+    catch (e) {
+        // Fallback for non-isolated context
+        window.verboo = verbooApi;
+        Object.defineProperty(window, 'verboo', {
+            value: verbooApi,
+            writable: false,
+            configurable: false
+        });
+    }
     // ============ Context Menu Handler ============
     document.addEventListener('contextmenu', (e) => {
         const canCapture = canCaptureContent();
         const adapter = getCurrentAdapter();
         console.log('[Verboo] Context menu triggered, platform:', adapter.platform.name);
-        electron_1.ipcRenderer.sendToHost('show-context-menu', {
+        electron_1.ipcRenderer.send('show-context-menu', {
             x: e.clientX,
             y: e.clientY,
             canCapture,
@@ -280,17 +288,17 @@ function captureVideoFrame() {
     electron_1.ipcRenderer.on('execute-capture', () => {
         console.log('[Verboo] Capture command received');
         const result = captureContent();
-        electron_1.ipcRenderer.sendToHost('capture-result', result);
+        electron_1.ipcRenderer.send('capture-result', result);
     });
     // Video frame capture command
     electron_1.ipcRenderer.on('execute-video-capture', async () => {
         console.log('[Verboo] Video capture command received');
         try {
             const result = await captureVideoFrame();
-            electron_1.ipcRenderer.sendToHost('video-capture-result', result);
+            electron_1.ipcRenderer.send('video-capture-result', result);
         }
         catch (error) {
-            electron_1.ipcRenderer.sendToHost('video-capture-result', { error: error.error || error.message });
+            electron_1.ipcRenderer.send('video-capture-result', { error: error.error || error.message });
         }
     });
     // ============ Bilibili AI Subtitle Interception ============
@@ -308,7 +316,7 @@ function captureVideoFrame() {
                 const subtitles = parseBilibiliAISubtitle(data);
                 if (subtitles && subtitles.length > 0) {
                     console.log('[Verboo] Captured AI subtitles:', subtitles.length, 'items');
-                    electron_1.ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                    electron_1.ipcRenderer.send('bilibili-ai-subtitle', {
                         type: 'bilibili-ai-subtitle',
                         data: subtitles,
                         count: subtitles.length
@@ -339,7 +347,7 @@ function captureVideoFrame() {
                     const subtitles = parseBilibiliAISubtitle(data);
                     if (subtitles && subtitles.length > 0) {
                         console.log('[Verboo] Captured AI subtitles (XHR):', subtitles.length, 'items');
-                        electron_1.ipcRenderer.sendToHost('bilibili-ai-subtitle', {
+                        electron_1.ipcRenderer.send('bilibili-ai-subtitle', {
                             type: 'bilibili-ai-subtitle',
                             data: subtitles,
                             count: subtitles.length
@@ -391,7 +399,7 @@ function captureVideoFrame() {
             const adapter = getCurrentAdapter();
             const videoElement = adapter.findVideoElement();
             if (videoElement && !videoElement.paused && videoElement.currentTime > 0) {
-                electron_1.ipcRenderer.sendToHost('video-time-update', {
+                electron_1.ipcRenderer.send('video-time-update', {
                     currentTime: videoElement.currentTime,
                     duration: videoElement.duration,
                     paused: videoElement.paused
