@@ -13,12 +13,14 @@
   },
   "dependencies": {
     "@radix-ui/react-hover-card": "^1.1.15",
+    "@types/react-window": "^1.8.8",
     "better-sqlite3": "^12.5.0",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^0.562.0",
     "node-fetch": "^3.3.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-window": "^2.2.3",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

@@ -25,6 +25,8 @@ import {
     lookupWord,
     lookupWords,
     analyzeTextDifficulty,
+    getVocabularyByCategory,
+    getVocabularyStats,
     // Types
     type AssetType,
     type WordInfo
@@ -798,6 +800,31 @@ function setupIpcHandlers() {
             return { success: true, data: results };
         } catch (error) {
             console.error('[IPC] analyze-text-difficulty failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    ipcMain.handle('get-vocabulary', async (event, options?: { category?: string; limit?: number; offset?: number }) => {
+        try {
+            const category = options?.category || 'all';
+            const limit = options?.limit || 100;
+            const offset = options?.offset || 0;
+            console.log('[IPC] get-vocabulary called, category:', category, 'limit:', limit, 'offset:', offset);
+            const results = getVocabularyByCategory(category, limit, offset);
+            return { success: true, data: results };
+        } catch (error) {
+            console.error('[IPC] get-vocabulary failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    ipcMain.handle('get-vocabulary-stats', async () => {
+        try {
+            console.log('[IPC] get-vocabulary-stats called');
+            const stats = getVocabularyStats();
+            return { success: true, data: stats };
+        } catch (error) {
+            console.error('[IPC] get-vocabulary-stats failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });

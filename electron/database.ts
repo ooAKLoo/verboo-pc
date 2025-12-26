@@ -870,3 +870,130 @@ export function analyzeTextDifficulty(text: string): Array<{
 
     return results;
 }
+
+/**
+ * Get vocabulary words by category with pagination
+ * @param category - vocabulary category filter (e.g., 'gk', 'zk', 'cet4', etc.) or 'all'
+ * @param limit - max number of words to return
+ * @param offset - pagination offset
+ * @returns Array of words with their info and difficulty level
+ */
+export function getVocabularyByCategory(
+    category: string = 'all',
+    limit: number = 100,
+    offset: number = 0
+): Array<{
+    word: string;
+    info: WordInfo;
+    difficulty: 'high' | 'medium' | 'low';
+}> {
+    const db = initVocabDatabase();
+    if (!db) {
+        console.error('[Database] getVocabularyByCategory - database not initialized');
+        return [];
+    }
+
+    // Build WHERE clause based on category
+    let whereClause = '';
+    const categoryMap: Record<string, string> = {
+        'zk': 'is_zk = 1',
+        'gk': 'is_gk = 1',
+        'cet4': 'is_cet4 = 1',
+        'cet6': 'is_cet6 = 1',
+        'ky': 'is_ky = 1',
+        'toefl': 'is_toefl = 1',
+        'ielts': 'is_ielts = 1',
+        'gre': 'is_gre = 1',
+        'oxford3000': 'is_oxford_3000 = 1',
+    };
+
+    if (category !== 'all' && categoryMap[category]) {
+        whereClause = `WHERE ${categoryMap[category]}`;
+    }
+
+    // Query with ordering by difficulty indicators
+    const query = `
+        SELECT * FROM words
+        ${whereClause}
+        ORDER BY
+            CASE
+                WHEN cefr_level = 'C2' THEN 1
+                WHEN cefr_level = 'C1' THEN 2
+                WHEN is_gre = 1 THEN 3
+                WHEN cefr_level = 'B2' THEN 4
+                WHEN is_toefl = 1 OR is_ielts = 1 THEN 5
+                ELSE 6
+            END,
+            coca_rank DESC NULLS LAST,
+            word ASC
+        LIMIT ? OFFSET ?
+    `;
+
+    try {
+        const rows = db.prepare(query).all(limit, offset) as VocabRow[];
+        console.log('[Database] getVocabularyByCategory - found', rows.length, 'words for category:', category);
+
+        const results: Array<{
+            word: string;
+            info: WordInfo;
+            difficulty: 'high' | 'medium' | 'low';
+        }> = [];
+
+        for (const row of rows) {
+            const info = rowToWordInfo(row);
+            const difficulty = getWordDifficulty(info);
+            if (difficulty) {
+                results.push({ word: row.word, info, difficulty });
+            }
+        }
+
+        return results;
+    } catch (error) {
+        console.error('[Database] getVocabularyByCategory - query error:', error);
+        return [];
+    }
+}
+
+/**
+ * Get vocabulary statistics by category
+ * @returns Object with count for each category
+ */
+export function getVocabularyStats(): Record<string, number> {
+    const db = initVocabDatabase();
+    if (!db) {
+        console.error('[Database] getVocabularyStats - database not initialized');
+        return {};
+    }
+
+    try {
+        const stats: Record<string, number> = {};
+
+        // Get total count
+        const totalRow = db.prepare('SELECT COUNT(*) as count FROM words').get() as { count: number };
+        stats.all = totalRow.count;
+
+        // Get counts for each category
+        const categories = [
+            { key: 'zk', column: 'is_zk' },
+            { key: 'gk', column: 'is_gk' },
+            { key: 'cet4', column: 'is_cet4' },
+            { key: 'cet6', column: 'is_cet6' },
+            { key: 'ky', column: 'is_ky' },
+            { key: 'toefl', column: 'is_toefl' },
+            { key: 'ielts', column: 'is_ielts' },
+            { key: 'gre', column: 'is_gre' },
+            { key: 'oxford3000', column: 'is_oxford_3000' },
+        ];
+
+        for (const cat of categories) {
+            const row = db.prepare(`SELECT COUNT(*) as count FROM words WHERE ${cat.column} = 1`).get() as { count: number };
+            stats[cat.key] = row.count;
+        }
+
+        console.log('[Database] getVocabularyStats:', stats);
+        return stats;
+    } catch (error) {
+        console.error('[Database] getVocabularyStats - error:', error);
+        return {};
+    }
+}

@@ -717,6 +717,31 @@ function setupIpcHandlers() {
             return { success: false, error: error.message };
         }
     });
+    electron_1.ipcMain.handle('get-vocabulary', async (event, options) => {
+        try {
+            const category = options?.category || 'all';
+            const limit = options?.limit || 100;
+            const offset = options?.offset || 0;
+            console.log('[IPC] get-vocabulary called, category:', category, 'limit:', limit, 'offset:', offset);
+            const results = (0, database_1.getVocabularyByCategory)(category, limit, offset);
+            return { success: true, data: results };
+        }
+        catch (error) {
+            console.error('[IPC] get-vocabulary failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    electron_1.ipcMain.handle('get-vocabulary-stats', async () => {
+        try {
+            console.log('[IPC] get-vocabulary-stats called');
+            const stats = (0, database_1.getVocabularyStats)();
+            return { success: true, data: stats };
+        }
+        catch (error) {
+            console.error('[IPC] get-vocabulary-stats failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
     console.log('[Main] Vocabulary IPC handlers registered successfully');
 }
 electron_1.app.on('window-all-closed', () => {

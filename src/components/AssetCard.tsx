@@ -1,4 +1,4 @@
-import { Clock, Trash2, Download, Edit3, ExternalLink, Play } from 'lucide-react';
+import { Clock, Trash2, Download, ExternalLink, Play } from 'lucide-react';
 
 export type AssetType = 'content' | 'screenshot';
 
@@ -50,10 +50,9 @@ interface AssetCardProps {
     onClick: () => void;
     onDelete: (e: React.MouseEvent) => void;
     onDownload?: (e: React.MouseEvent) => void;
-    onEdit?: (e: React.MouseEvent) => void;
 }
 
-export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit }: AssetCardProps) {
+export function AssetCard({ asset, onClick, onDelete, onDownload }: AssetCardProps) {
     const isScreenshot = asset.type === 'screenshot';
     const typeData = asset.typeData as ScreenshotTypeData | ContentTypeData;
 
@@ -89,7 +88,7 @@ export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit }: Asse
     return (
         <div
             onClick={onClick}
-            className="group relative bg-white border border-[#e4e4e7] rounded-lg overflow-hidden hover:border-[#d4d4d8] hover:shadow-sm transition-all cursor-pointer"
+            className="group relative bg-white border border-zinc-100 rounded-lg overflow-hidden hover:border-zinc-200 hover:shadow-sm transition-all cursor-pointer"
         >
             {/* Thumbnail */}
             <div className="aspect-video bg-[#f4f4f5] relative overflow-hidden">
@@ -105,8 +104,19 @@ export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit }: Asse
                     </div>
                 )}
 
-                {/* Type Badge & Time */}
-                <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                {/* Favicon - Cover 左下角 */}
+                {asset.favicon && (
+                    <div className="absolute bottom-2 left-2">
+                        <img
+                            src={asset.favicon}
+                            alt={asset.platform}
+                            className="w-5 h-5 rounded shadow-sm"
+                        />
+                    </div>
+                )}
+
+                {/* Timestamp / Type Badge - Cover 右下角 */}
+                <div className="absolute bottom-2 right-2">
                     {isScreenshot && (
                         <div className="px-2 py-1 bg-black/75 text-white text-[11px] rounded font-mono flex items-center gap-1">
                             <Play size={10} fill="white" />
@@ -119,20 +129,6 @@ export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit }: Asse
                         </div>
                     )}
                 </div>
-
-                {/* Platform Badge */}
-                {asset.platform && (
-                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-white/90 rounded text-[11px] text-[#52525b]">
-                        {asset.favicon && (
-                            <img
-                                src={asset.favicon}
-                                alt={asset.platform}
-                                className="w-3.5 h-3.5 rounded"
-                            />
-                        )}
-                        <span className="capitalize">{asset.platform}</span>
-                    </div>
-                )}
             </div>
 
             {/* Info */}
@@ -167,15 +163,6 @@ export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit }: Asse
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {isScreenshot && onEdit && (
-                            <button
-                                onClick={onEdit}
-                                className="p-1 hover:bg-[#eff6ff] rounded text-[#3b82f6]"
-                                title="编辑"
-                            >
-                                <Edit3 size={14} />
-                            </button>
-                        )}
                         {isScreenshot && onDownload && (
                             <button
                                 onClick={onDownload}
