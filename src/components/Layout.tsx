@@ -7,15 +7,17 @@ interface LayoutProps {
     right: ReactNode;
     learning?: ReactNode;
     asset?: ReactNode;
+    subtitle?: ReactNode;
     leftCollapsed: boolean;
     rightCollapsed: boolean;
     learningMode?: boolean;
     assetMode?: boolean;
+    subtitleMode?: boolean;
 }
 
 const MIN_RIGHT_WIDTH = 100;
 
-export function Layout({ left, main, right, learning, asset, leftCollapsed, rightCollapsed, learningMode, assetMode }: LayoutProps) {
+export function Layout({ left, main, right, learning, asset, subtitle, leftCollapsed, rightCollapsed, learningMode, assetMode, subtitleMode }: LayoutProps) {
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizing, setIsResizing] = useState(false);
     const lastXRef = useRef(0);
@@ -76,6 +78,10 @@ export function Layout({ left, main, right, learning, asset, leftCollapsed, righ
             ) : assetMode ? (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {asset}
+                </div>
+            ) : subtitleMode ? (
+                <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
+                    {subtitle}
                 </div>
             ) : (
                 <>

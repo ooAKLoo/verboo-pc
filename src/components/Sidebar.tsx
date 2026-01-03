@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles } from 'lucide-react';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -105,6 +105,7 @@ interface SidebarProps {
     onCaptureScreenshot: (markType?: MarkType) => void;
     onOpenEnglishLearning: () => void;
     onOpenAssetPanel: () => void;
+    onOpenSubtitleLibrary: () => void;
     // Navigation toolbar props
     inputUrl: string;
     onInputUrlChange: (url: string) => void;
@@ -129,6 +130,7 @@ export function Sidebar({
     onCaptureScreenshot,
     onOpenEnglishLearning,
     onOpenAssetPanel,
+    onOpenSubtitleLibrary,
     inputUrl,
     onInputUrlChange,
     onNavigate,
@@ -274,6 +276,14 @@ export function Sidebar({
                 >
                     <Package size={14} className="text-gray-500" />
                     <span className="text-[13px] font-medium text-[#18181b]">素材库</span>
+                </div>
+
+                <div
+                    onClick={onOpenSubtitleLibrary}
+                    className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                >
+                    <Subtitles size={14} className="text-gray-500" />
+                    <span className="text-[13px] font-medium text-[#18181b]">字幕库</span>
                 </div>
             </div>
 

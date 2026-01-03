@@ -1111,6 +1111,16 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
 
     return (
         <div className="h-full bg-white rounded-xl flex flex-col">
+            {/* Header */}
+            <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
+                <span className="text-sm font-medium text-zinc-700">英语学习</span>
+                <button
+                    onClick={onClose}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                >
+                    <X size={18} className="text-zinc-400" />
+                </button>
+            </div>
 
             {/* Filter Bar */}
             <div className="flex-none px-8 py-3 flex items-center gap-3">
