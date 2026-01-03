@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Asset } from './AssetCard';
-import { FileText, SearchX, FileX, Sparkles, Star, AlertTriangle } from 'lucide-react';
+import type { Asset, ScreenshotTypeData } from './AssetCard';
+import { FileText, SearchX, FileX, Sparkles, Star, AlertTriangle, Image, Clock, Play, Trash2 } from 'lucide-react';
+
+const { ipcRenderer } = window.require('electron');
 
 // Mark type for subtitles
 type MarkType = 'important' | 'difficult';
@@ -11,6 +13,8 @@ interface SubtitleMark {
     markType: MarkType;
 }
 
+type TabType = 'subtitle' | 'asset';
+
 interface InfoPanelProps {
     data: any;
     currentVideoTime?: number;
@@ -20,9 +24,13 @@ interface InfoPanelProps {
     onCloseEnglishLearning?: () => void;
     // New: marks from captures
     subtitleMarks?: SubtitleMark[];
+    // Current video URL for filtering assets
+    currentUrl?: string;
 }
 
-export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [] }: InfoPanelProps) {
+export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [], currentUrl, materialRefreshTrigger }: InfoPanelProps) {
+    const [activeTab, setActiveTab] = useState<TabType>('subtitle');
+    const [videoAssets, setVideoAssets] = useState<Asset[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [autoScroll, setAutoScroll] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -87,6 +95,45 @@ export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [] }: In
         return null;
     };
 
+    // Load assets for current video URL
+    useEffect(() => {
+        const loadVideoAssets = async () => {
+            if (!currentUrl) {
+                setVideoAssets([]);
+                return;
+            }
+
+            try {
+                console.log('[InfoPanel] Loading assets for URL:', currentUrl);
+                const response = await ipcRenderer.invoke('get-assets', {
+                    type: 'screenshot',
+                    url: currentUrl
+                });
+
+                console.log('[InfoPanel] Assets response:', response.data?.length || 0, 'items');
+                if (response.success && response.data) {
+                    setVideoAssets(response.data);
+                }
+            } catch (error) {
+                console.error('[InfoPanel] Failed to load video assets:', error);
+            }
+        };
+
+        loadVideoAssets();
+    }, [currentUrl, materialRefreshTrigger]);
+
+    // Delete asset handler
+    const handleDeleteAsset = async (assetId: number) => {
+        try {
+            const response = await ipcRenderer.invoke('delete-asset', assetId);
+            if (response.success) {
+                setVideoAssets(prev => prev.filter(a => a.id !== assetId));
+            }
+        } catch (error) {
+            console.error('[InfoPanel] Failed to delete asset:', error);
+        }
+    };
+
     // Copy subtitles to English Learning Prompt template
     const [copySuccess, setCopySuccess] = useState(false);
 
@@ -142,64 +189,99 @@ ${subtitleText}
 
     return (
         <div className="h-full flex flex-col font-sans bg-white text-primary">
-            {/* Header */}
+            {/* Header with Tabs */}
             <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                    <FileText size={16} className="text-gray-400" />
-                    <span className="text-[14px] font-medium text-gray-900">字幕</span>
-                </div>
-            </div>
+                <div className="flex items-center gap-1">
+                    {/* 字幕 Tab */}
+                    <button
+                        onClick={() => setActiveTab('subtitle')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 ${
+                            activeTab === 'subtitle'
+                                ? 'bg-[#f4f4f5] text-[#18181b]'
+                                : 'text-[#71717a] hover:text-[#18181b] hover:bg-[#fafafa]'
+                        }`}
+                    >
+                        <FileText size={14} />
+                        字幕
+                    </button>
 
-            {/* Toolbar - Linear Style */}
-            <div className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                    {/* Search Input */}
-                    {Array.isArray(data) && data.length > 0 && (
-                        <div className="flex-1 relative">
-                            <input
-                                type="text"
-                                placeholder="搜索字幕..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
-                            />
-                        </div>
-                    )}
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-1">
-                        {Array.isArray(data) && data.length > 0 && (
-                            <>
-                                <button
-                                    onClick={copyToPrompt}
-                                    className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
-                                        copySuccess
-                                            ? 'text-green-600 bg-green-50'
-                                            : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
-                                    }`}
-                                    title="复制字幕到英语学习Prompt"
-                                >
-                                    <Sparkles size={12} />
-                                    {copySuccess ? '已复制' : 'AI学习'}
-                                </button>
-                                <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
-                            </>
+                    {/* 素材 Tab with Badge */}
+                    <button
+                        onClick={() => setActiveTab('asset')}
+                        className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150 ${
+                            activeTab === 'asset'
+                                ? 'bg-[#f4f4f5] text-[#18181b]'
+                                : 'text-[#71717a] hover:text-[#18181b] hover:bg-[#fafafa]'
+                        }`}
+                    >
+                        <Image size={14} />
+                        素材
+                        {videoAssets.length > 0 && (
+                            <span className={`ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
+                                activeTab === 'asset'
+                                    ? 'bg-[#18181b] text-white'
+                                    : 'bg-[#e4e4e7] text-[#52525b]'
+                            }`}>
+                                {videoAssets.length}
+                            </span>
                         )}
-                        <button
-                            onClick={() => setAutoScroll(!autoScroll)}
-                            className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
-                                autoScroll
-                                    ? 'text-[#18181b] bg-[#f4f4f5]'
-                                    : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
-                            }`}
-                        >
-                            {autoScroll ? '自动' : '手动'}
-                        </button>
-                    </div>
+                    </button>
                 </div>
             </div>
 
-            {/* Subtitle List - Linear Style */}
-            <div ref={scrollRef} className="flex-1 overflow-auto">
+            {/* Subtitle Tab Content */}
+            {activeTab === 'subtitle' && (
+                <>
+                    {/* Toolbar - Linear Style */}
+                    <div className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                            {/* Search Input */}
+                            {Array.isArray(data) && data.length > 0 && (
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="text"
+                                        placeholder="搜索字幕..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
+                                    />
+                                </div>
+                            )}
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1">
+                                {Array.isArray(data) && data.length > 0 && (
+                                    <>
+                                        <button
+                                            onClick={copyToPrompt}
+                                            className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 flex items-center gap-1 ${
+                                                copySuccess
+                                                    ? 'text-green-600 bg-green-50'
+                                                    : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
+                                            }`}
+                                            title="复制字幕到英语学习Prompt"
+                                        >
+                                            <Sparkles size={12} />
+                                            {copySuccess ? '已复制' : 'AI学习'}
+                                        </button>
+                                        <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
+                                    </>
+                                )}
+                                <button
+                                    onClick={() => setAutoScroll(!autoScroll)}
+                                    className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
+                                        autoScroll
+                                            ? 'text-[#18181b] bg-[#f4f4f5]'
+                                            : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
+                                    }`}
+                                >
+                                    {autoScroll ? '自动' : '手动'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Subtitle List - Linear Style */}
+                    <div ref={scrollRef} className="flex-1 overflow-auto">
                 {Array.isArray(filteredData) && filteredData.length > 0 ? (
                     <div className="pb-6">
                         {filteredData.map((item, index) => {
@@ -313,7 +395,83 @@ ${subtitleText}
                         </div>
                     </div>
                 )}
-            </div>
+                    </div>
+                </>
+            )}
+
+            {/* Asset Tab Content */}
+            {activeTab === 'asset' && (
+                <div className="flex-1 overflow-auto">
+                    {videoAssets.length > 0 ? (
+                        <div className="p-3 space-y-2">
+                            {videoAssets.map((asset) => {
+                                const typeData = asset.typeData as ScreenshotTypeData;
+                                const thumbnail = typeData.finalImageData || typeData.imageData;
+
+                                return (
+                                    <div
+                                        key={asset.id}
+                                        className="group relative bg-[#fafafa] rounded-lg overflow-hidden hover:bg-[#f4f4f5] transition-colors"
+                                    >
+                                        {/* Thumbnail */}
+                                        <div className="flex gap-3 p-2">
+                                            <div className="w-24 h-14 flex-shrink-0 rounded overflow-hidden bg-[#18181b]">
+                                                <img
+                                                    src={thumbnail}
+                                                    alt={asset.title}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                            <div className="flex-1 min-w-0 py-0.5">
+                                                {/* Timestamp */}
+                                                <div className="flex items-center gap-1.5 text-[11px] text-[#71717a] mb-1">
+                                                    <Play size={10} fill="currentColor" />
+                                                    <span className="font-mono">{formatTime(typeData.timestamp)}</span>
+                                                </div>
+                                                {/* Subtitle if exists */}
+                                                {typeData.selectedSubtitles && typeData.selectedSubtitles.length > 0 && (
+                                                    <div className="text-[12px] text-[#52525b] line-clamp-2 leading-relaxed">
+                                                        {typeData.selectedSubtitles[0].text}
+                                                    </div>
+                                                )}
+                                                {/* Created time */}
+                                                <div className="flex items-center gap-1 text-[10px] text-[#a1a1aa] mt-1">
+                                                    <Clock size={10} />
+                                                    {new Date(asset.createdAt).toLocaleString('zh-CN', {
+                                                        month: '2-digit',
+                                                        day: '2-digit',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </div>
+                                            </div>
+                                            {/* Delete button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteAsset(asset.id);
+                                                }}
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-[#fef2f2] rounded text-[#dc2626] transition-all self-center"
+                                                title="删除"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center gap-3">
+                            <Image size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
+                            <div className="text-center">
+                                <div className="text-[13px] font-medium text-[#71717a] mb-1">暂无截图</div>
+                                <div className="text-[12px] text-[#a1a1aa]">播放视频时截图会显示在这里</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

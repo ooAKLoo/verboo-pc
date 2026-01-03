@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Loader2, Globe, Camera, Star, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package } from 'lucide-react';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -26,11 +26,12 @@ function getDomain(url: string): string {
     }
 }
 
-// Get favicon URL from site URL
+// Get favicon URL from site URL - directly from the website
 function getFaviconUrl(url: string): string {
     try {
         const urlObj = new URL(url);
-        return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
+        // 直接从网站获取 favicon
+        return `${urlObj.origin}/favicon.ico`;
     } catch {
         return '';
     }
@@ -287,18 +288,14 @@ export function Sidebar({
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left"
                                 title={`${site.url}${site.lastPosition ? ` - 上次观看到 ${formatPosition(site.lastPosition)}` : ''}`}
                             >
-                                {getFaviconUrl(site.url) ? (
-                                    <img
-                                        src={getFaviconUrl(site.url)}
-                                        alt=""
-                                        className="w-4 h-4 flex-shrink-0"
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
-                                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                        }}
-                                    />
-                                ) : null}
-                                <Globe size={14} className={`text-gray-400 flex-shrink-0 ${getFaviconUrl(site.url) ? 'hidden' : ''}`} />
+                                <img
+                                    src={getFaviconUrl(site.url) || '/icon.svg'}
+                                    alt=""
+                                    className="w-4 h-4 flex-shrink-0"
+                                    onError={(e) => {
+                                        e.currentTarget.src = '/icon.svg';
+                                    }}
+                                />
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs text-gray-600 truncate">
                                         {site.title || getDomain(site.url)}

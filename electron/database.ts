@@ -373,12 +373,13 @@ export function getAssets(
     options: {
         type?: AssetType;
         platform?: string;
+        url?: string;
         limit?: number;
         offset?: number
     } = {}
 ): Asset[] {
     const db = getDatabase();
-    const { type, platform, limit = 50, offset = 0 } = options;
+    const { type, platform, url, limit = 50, offset = 0 } = options;
 
     let query = 'SELECT * FROM assets WHERE 1=1';
     const params: any[] = [];
@@ -393,10 +394,38 @@ export function getAssets(
         params.push(platform);
     }
 
+    if (url) {
+        // Extract video identifier for matching
+        // YouTube: ?v=VIDEO_ID, Bilibili: /video/BV... or /video/av...
+        let videoId = '';
+
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            const match = url.match(/[?&]v=([^&]+)/) || url.match(/youtu\.be\/([^?&]+)/);
+            if (match) videoId = match[1];
+        } else if (url.includes('bilibili.com')) {
+            const match = url.match(/\/video\/(BV[a-zA-Z0-9]+|av\d+)/i);
+            if (match) videoId = match[1];
+        }
+
+        if (videoId) {
+            console.log('[Database] Filtering by videoId:', videoId);
+            query += ' AND url LIKE ?';
+            params.push('%' + videoId + '%');
+        } else {
+            // Fallback: exact match or prefix match
+            const baseUrl = url.split('&')[0];
+            console.log('[Database] Filtering by baseUrl:', baseUrl);
+            query += ' AND (url = ? OR url LIKE ?)';
+            params.push(url, baseUrl + '%');
+        }
+    }
+
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
+    console.log('[Database] Query:', query, 'Params:', params.slice(0, -2));
     const rows = db.prepare(query).all(...params) as AssetRow[];
+    console.log('[Database] Found', rows.length, 'assets');
     return rows.map(rowToAsset);
 }
 

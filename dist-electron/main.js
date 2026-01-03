@@ -209,6 +209,7 @@ function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1200,
         height: 800,
+        icon: path_1.default.join(__dirname, '../resources/icon.png'),
         titleBarStyle: 'hiddenInset', // macOS: 隐藏标题栏但保留红绿灯按钮
         trafficLightPosition: { x: 16, y: 18 }, // 调整红绿灯位置
         webPreferences: {
@@ -346,8 +347,8 @@ function setupIpcHandlers() {
     electron_1.ipcMain.handle('wcv-go-back', async (event, tabId) => {
         try {
             const view = webContentsViews.get(tabId);
-            if (view && view.webContents.canGoBack()) {
-                view.webContents.goBack();
+            if (view && view.webContents.navigationHistory.canGoBack()) {
+                view.webContents.navigationHistory.goBack();
                 return { success: true };
             }
             return { success: false, error: 'Cannot go back' };
@@ -361,8 +362,8 @@ function setupIpcHandlers() {
     electron_1.ipcMain.handle('wcv-go-forward', async (event, tabId) => {
         try {
             const view = webContentsViews.get(tabId);
-            if (view && view.webContents.canGoForward()) {
-                view.webContents.goForward();
+            if (view && view.webContents.navigationHistory.canGoForward()) {
+                view.webContents.navigationHistory.goForward();
                 return { success: true };
             }
             return { success: false, error: 'Cannot go forward' };
@@ -408,8 +409,8 @@ function setupIpcHandlers() {
             if (view) {
                 return {
                     success: true,
-                    canGoBack: view.webContents.canGoBack(),
-                    canGoForward: view.webContents.canGoForward()
+                    canGoBack: view.webContents.navigationHistory.canGoBack(),
+                    canGoForward: view.webContents.navigationHistory.canGoForward()
                 };
             }
             return { success: false, error: 'View not found' };

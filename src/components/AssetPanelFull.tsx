@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, FileText, ArrowLeft, X, Package, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check } from 'lucide-react';
+import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
 
@@ -521,12 +521,6 @@ function ScreenshotDetailView({
                     >
                         <Trash2 size={16} className="text-red-500" />
                     </button>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-zinc-100 transition-colors"
-                    >
-                        <X size={18} className="text-zinc-400" />
-                    </button>
                 </div>
             </div>
 
@@ -773,12 +767,38 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
     const [filter, setFilter] = useState<FilterType>('all');
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
+    // 多选状态
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
     // Advanced filter states
     const [markFilter, setMarkFilter] = useState<MarkFilter>('all');
     const [sortBy, setSortBy] = useState<SortType>('created');
     const [selectedSource, setSelectedSource] = useState<string | null>(null); // 选中的视频URL
     const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null); // 选中的平台
     const [activePopover, setActivePopover] = useState<string | null>(null);
+
+    // 多选相关方法
+    const hasSelection = selectedIds.size > 0;
+    const selectedItems = useMemo(() =>
+        assets.filter(asset => selectedIds.has(asset.id)),
+        [assets, selectedIds]
+    );
+
+    const toggleSelection = useCallback((id: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    }, []);
+
+    const clearSelection = useCallback(() => {
+        setSelectedIds(new Set());
+    }, []);
 
     useEffect(() => {
         loadAssets();
@@ -880,6 +900,48 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
         return result;
     }, [assets, selectedSource, selectedPlatform, markFilter, sortBy]);
 
+    // selectAll 需要在 filteredAssets 之后定义
+    const selectAll = useCallback(() => {
+        setSelectedIds(new Set(filteredAssets.map(a => a.id)));
+    }, [filteredAssets]);
+
+    // 批量删除 - 直接执行
+    const handleBatchDelete = async () => {
+        if (selectedIds.size === 0) return;
+
+        try {
+            for (const id of selectedIds) {
+                await ipcRenderer.invoke('delete-asset', id);
+            }
+            setAssets(prev => prev.filter(a => !selectedIds.has(a.id)));
+            clearSelection();
+        } catch (error) {
+            console.error('Error batch deleting assets:', error);
+        }
+    };
+
+    // 批量下载 - 直接下载到 Downloads 文件夹
+    const handleBatchDownload = () => {
+        if (selectedIds.size === 0) return;
+
+        selectedItems.forEach(asset => {
+            if (asset.type === 'screenshot') {
+                const typeData = asset.typeData as ScreenshotTypeData;
+                const imageData = typeData.finalImageData || typeData.imageData;
+                const link = document.createElement('a');
+                link.href = imageData;
+                link.download = `screenshot_${asset.id}_${new Date(asset.createdAt).getTime()}.png`;
+                link.click();
+            }
+        });
+        clearSelection();
+    };
+
+    // 获取可下载的截图数量
+    const downloadableCount = useMemo(() =>
+        selectedItems.filter(a => a.type === 'screenshot').length,
+        [selectedItems]
+    );
 
     const loadAssets = async () => {
         setLoading(true);
@@ -908,7 +970,6 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
 
     const handleDelete = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('确定要删除这个素材吗？')) return;
 
         try {
             const response = await ipcRenderer.invoke('delete-asset', id);
@@ -995,12 +1056,6 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
                             title="删除"
                         >
                             <Trash2 size={16} className="text-red-500" />
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-lg hover:bg-zinc-100 transition-colors"
-                        >
-                            <X size={18} className="text-zinc-400" />
                         </button>
                     </div>
                 </div>
@@ -1164,7 +1219,6 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
 
     // Handle delete from detail view
     const handleDeleteFromDetail = async (id: number) => {
-        if (!confirm('确定要删除这个素材吗？')) return;
         try {
             const response = await ipcRenderer.invoke('delete-asset', id);
             if (response.success) {
@@ -1213,7 +1267,18 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
     }
 
     return (
-        <div className="h-full bg-white rounded-xl flex flex-col">
+        <div className="h-full bg-white rounded-xl flex flex-col relative">
+
+            {/* Header with close button */}
+            <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
+                <span className="text-sm font-medium text-zinc-700">素材库</span>
+                <button
+                    onClick={onClose}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                >
+                    <X size={18} className="text-zinc-400" />
+                </button>
+            </div>
 
             {/* Filter Bar */}
             <div className="flex-none px-8 py-3 flex items-center gap-3">
@@ -1421,11 +1486,121 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
                                 onClick={() => setSelectedAsset(asset)}
                                 onDelete={(e) => handleDelete(asset.id, e)}
                                 onDownload={asset.type === 'screenshot' ? (e) => handleDownload(asset, e) : undefined}
+                                isSelected={selectedIds.has(asset.id)}
+                                onToggleSelect={() => toggleSelection(asset.id)}
+                                hasSelection={hasSelection}
                             />
                         ))}
                     </div>
                 </div>
             )}
+
+            {/* FloatingActionBar - 底部灵动岛 */}
+            {hasSelection && (
+                <FloatingActionBar
+                    selectedCount={selectedIds.size}
+                    totalCount={filteredAssets.length}
+                    downloadableCount={downloadableCount}
+                    onClearSelection={clearSelection}
+                    onSelectAll={selectAll}
+                    onBatchDownload={handleBatchDownload}
+                    onBatchDelete={handleBatchDelete}
+                />
+            )}
+        </div>
+    );
+}
+
+/**
+ * FloatingActionBar - 底部灵动岛
+ * 参照 Ohoo 项目的设计，深色玻璃质感
+ */
+function FloatingActionBar({
+    selectedCount,
+    totalCount,
+    downloadableCount,
+    onClearSelection,
+    onSelectAll,
+    onBatchDownload,
+    onBatchDelete,
+}: {
+    selectedCount: number;
+    totalCount: number;
+    downloadableCount: number;
+    onClearSelection: () => void;
+    onSelectAll: () => void;
+    onBatchDownload: () => void;
+    onBatchDelete: () => void;
+}) {
+    const isAllSelected = totalCount > 0 && selectedCount === totalCount;
+
+    return (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+            {/* 深色玻璃质感容器 - 灵动岛风格 */}
+            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-white/10 text-zinc-200 ring-1 ring-black">
+
+                {/* 1. 左侧计数与全选控制区 */}
+                <div className="relative flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-xl mr-1">
+                    {/* 数量显示 */}
+                    <span className="text-xs font-medium text-white">
+                        {selectedCount} / {totalCount}
+                    </span>
+
+                    {/* 分隔点 */}
+                    <span className="text-zinc-500 text-xs">·</span>
+
+                    {/* 全选/取消 切换按钮 */}
+                    <button
+                        onClick={onSelectAll}
+                        className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                        {isAllSelected ? '取消' : '全选'}
+                    </button>
+
+                    {/* 微型关闭按钮 - 右上角徽章风格 */}
+                    <button
+                        onClick={onClearSelection}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-zinc-600 hover:bg-zinc-500 text-white flex items-center justify-center shadow-sm transition-colors ring-2 ring-zinc-900"
+                        title="清空选择"
+                    >
+                        <X size={10} strokeWidth={2.5} />
+                    </button>
+                </div>
+
+                {/* 分割线 */}
+                <div className="w-px h-4 bg-white/10" />
+
+                {/* 2. 操作按钮组 */}
+                <div className="flex items-center gap-1 px-1">
+                    {/* 下载按钮 - 只有有可下载截图时才启用 */}
+                    <button
+                        onClick={onBatchDownload}
+                        disabled={downloadableCount === 0}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            downloadableCount > 0
+                                ? 'hover:bg-white/10 text-white/90'
+                                : 'text-white/30 cursor-not-allowed'
+                        }`}
+                        title={downloadableCount > 0 ? `下载 ${downloadableCount} 张截图` : '无可下载的截图'}
+                    >
+                        <Download size={14} />
+                        <span>下载</span>
+                        {downloadableCount > 0 && downloadableCount !== selectedCount && (
+                            <span className="text-[10px] text-white/50">({downloadableCount})</span>
+                        )}
+                    </button>
+
+                    {/* 删除按钮 */}
+                    <button
+                        onClick={onBatchDelete}
+                        className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-500/20 text-white/90 hover:text-red-400 rounded-lg text-xs font-medium transition-colors"
+                        title="删除"
+                    >
+                        <Trash2 size={14} />
+                        <span>删除</span>
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

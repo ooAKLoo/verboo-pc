@@ -1,4 +1,4 @@
-import { Clock, Trash2, Download, ExternalLink, Play } from 'lucide-react';
+import { Clock, Trash2, Download, ExternalLink, Play, Check } from 'lucide-react';
 
 export type AssetType = 'content' | 'screenshot';
 
@@ -50,9 +50,13 @@ interface AssetCardProps {
     onClick: () => void;
     onDelete: (e: React.MouseEvent) => void;
     onDownload?: (e: React.MouseEvent) => void;
+    onEdit?: (e: React.MouseEvent) => void;
+    isSelected?: boolean;
+    onToggleSelect?: (e: React.MouseEvent) => void;
+    hasSelection?: boolean;
 }
 
-export function AssetCard({ asset, onClick, onDelete, onDownload }: AssetCardProps) {
+export function AssetCard({ asset, onClick, onDelete, onDownload, onEdit, isSelected = false, onToggleSelect, hasSelection = false }: AssetCardProps) {
     const isScreenshot = asset.type === 'screenshot';
     const typeData = asset.typeData as ScreenshotTypeData | ContentTypeData;
 
@@ -85,11 +89,48 @@ export function AssetCard({ asset, onClick, onDelete, onDownload }: AssetCardPro
 
     const thumbnail = getThumbnail();
 
+    // 处理点击事件：如果有选中项，点击切换选择；否则进入详情
+    const handleClick = (e: React.MouseEvent) => {
+        if (hasSelection && onToggleSelect) {
+            onToggleSelect(e);
+        } else {
+            onClick();
+        }
+    };
+
     return (
         <div
-            onClick={onClick}
-            className="group relative bg-white border border-zinc-100 rounded-lg overflow-hidden hover:border-zinc-200 hover:shadow-sm transition-all cursor-pointer"
+            onClick={handleClick}
+            className={`group relative bg-white border rounded-lg overflow-hidden hover:shadow-sm transition-all cursor-pointer ${
+                isSelected
+                    ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md'
+                    : 'border-zinc-100 hover:border-zinc-200'
+            }`}
         >
+            {/* Selection Checkbox - 左上角圆形选择框 */}
+            <div className={`absolute top-2 left-2 z-20 transition-opacity duration-150 ${
+                isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSelect?.(e);
+                    }}
+                    className="p-0.5 hover:scale-110 active:scale-90 transition-transform duration-200"
+                >
+                    <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                            isSelected
+                                ? 'bg-white border-white shadow-md'
+                                : 'bg-black/20 border-white/80 hover:bg-black/30'
+                        }`}
+                        style={{ boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)' }}
+                    >
+                        {isSelected && <Check size={12} className="text-blue-500" strokeWidth={3} />}
+                    </div>
+                </button>
+            </div>
+
             {/* Thumbnail */}
             <div className="aspect-video bg-[#f4f4f5] relative overflow-hidden">
                 {thumbnail ? (

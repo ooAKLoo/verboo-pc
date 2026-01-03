@@ -629,6 +629,7 @@ function App() {
             showEnglishLearning={showEnglishLearning}
             onCloseEnglishLearning={() => setShowEnglishLearning(false)}
             subtitleMarks={subtitleMarks}
+            currentUrl={currentUrl}
           />
         }
         learning={
