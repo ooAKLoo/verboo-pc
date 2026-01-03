@@ -2,10 +2,18 @@
  * Bilibili Platform Adapter
  *
  * Handles video capture and author extraction for Bilibili (哔哩哔哩).
+ * Includes AI subtitle extraction via the AI assistant panel.
  */
 
 import type { PlatformAdapter, PlatformInfo, AdapterCapabilities, AuthorInfo, ContentCaptureResult } from './types';
 import { adapterRegistry } from './registry';
+
+// Subtitle item interface
+interface SubtitleItem {
+    start: number;
+    duration: number;
+    text: string;
+}
 
 class BilibiliAdapter implements PlatformAdapter {
     readonly platform: PlatformInfo = {
@@ -165,6 +173,210 @@ class BilibiliAdapter implements PlatformAdapter {
      */
     captureContent(): ContentCaptureResult | null {
         return null;
+    }
+
+    /**
+     * Extract subtitles from Bilibili AI assistant
+     * Uses the same approach as the bilibili-subtitle userscript:
+     * 1. Click AI assistant to open panel
+     * 2. Click "字幕列表" button
+     * 3. Extract subtitles from DOM
+     */
+    async extractSubtitles(): Promise<SubtitleItem[]> {
+        return new Promise((resolve, reject) => {
+            console.log('[BilibiliAdapter] Starting subtitle extraction...');
+
+            // Step 1: Find and click AI assistant button
+            const aiAssistantContainer = document.querySelector('.video-ai-assistant') as HTMLElement;
+            if (!aiAssistantContainer) {
+                reject(new Error('无法找到AI小助手按钮'));
+                return;
+            }
+
+            aiAssistantContainer.click();
+            console.log('[BilibiliAdapter] Clicked AI assistant');
+
+            // Step 2: Wait for panel to load, then click subtitle list button
+            setTimeout(() => {
+                const subtitleListButton = this.findSubtitleListButton();
+                if (!subtitleListButton) {
+                    this.closeAIPanel();
+                    reject(new Error('无法找到"字幕列表"按钮，请确保AI小助手面板已正确加载'));
+                    return;
+                }
+
+                console.log('[BilibiliAdapter] Found subtitle list button, clicking...');
+                subtitleListButton.click();
+
+                // Step 3: Wait for subtitles to load, then extract
+                setTimeout(() => {
+                    try {
+                        const subtitles = this.extractSubtitlesFromDOM();
+                        this.closeAIPanel();
+
+                        if (subtitles.length === 0) {
+                            reject(new Error('未能提取到字幕，请确保视频有AI字幕'));
+                            return;
+                        }
+
+                        console.log('[BilibiliAdapter] Extracted', subtitles.length, 'subtitles');
+                        resolve(subtitles);
+                    } catch (error) {
+                        this.closeAIPanel();
+                        reject(error);
+                    }
+                }, 2000);
+            }, 2000);
+        });
+    }
+
+    /**
+     * Find the subtitle list button in AI assistant panel
+     */
+    private findSubtitleListButton(): HTMLElement | null {
+        // Try specific class first
+        const buttonByClass = document.querySelector('span._Label_krx6h_18') as HTMLElement;
+        if (buttonByClass && buttonByClass.textContent === '字幕列表') {
+            return buttonByClass;
+        }
+
+        // Try various selectors
+        const selectors = [
+            'span[class*="Label"]',
+            'div[class*="Label"]',
+            'button[class*="Label"]',
+            'span',
+            'button'
+        ];
+
+        for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            for (const element of elements) {
+                if (element.textContent?.includes('字幕列表')) {
+                    return element as HTMLElement;
+                }
+            }
+        }
+
+        // Last resort: search in AI panel containers
+        const panelElements = document.querySelectorAll('[class*="panel"], [class*="container"], [class*="ai"], [class*="assistant"]');
+        for (const panel of panelElements) {
+            const children = panel.querySelectorAll('*');
+            for (const child of children) {
+                if (child.textContent === '字幕列表') {
+                    return child as HTMLElement;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract subtitles from the DOM after clicking subtitle list
+     */
+    private extractSubtitlesFromDOM(): SubtitleItem[] {
+        const subtitles: SubtitleItem[] = [];
+
+        // Method 1: Try primary selectors (from GitHub project)
+        document.querySelectorAll('._Part_1iu0q_16').forEach(part => {
+            const timeElem = part.querySelector('._TimeText_1iu0q_35');
+            const textElem = part.querySelector('._Text_1iu0q_64');
+
+            if (timeElem && textElem) {
+                const timeText = timeElem.textContent?.trim() || '0:00';
+                const text = textElem.textContent?.trim() || '';
+                if (text) {
+                    subtitles.push({
+                        start: this.parseTimeToSeconds(timeText),
+                        duration: 3, // Default duration
+                        text
+                    });
+                }
+            }
+        });
+
+        if (subtitles.length > 0) return subtitles;
+
+        // Method 2: Look for time + text pattern
+        const timeElements = document.querySelectorAll('[class*="time"], [class*="Time"], [class*="TimeText"]');
+        timeElements.forEach(timeElem => {
+            const timeText = timeElem.textContent?.trim() || '';
+            if (/^\d+:\d+$/.test(timeText)) {
+                const textElem = timeElem.nextElementSibling;
+                if (textElem && textElem.textContent?.trim()) {
+                    subtitles.push({
+                        start: this.parseTimeToSeconds(timeText),
+                        duration: 3,
+                        text: textElem.textContent.trim()
+                    });
+                }
+            }
+        });
+
+        if (subtitles.length > 0) return subtitles;
+
+        // Method 3: Look for subtitle containers
+        const containerSelectors = [
+            '[class*="subtitle"]',
+            '[class*="Subtitle"]',
+            '[class*="Part"]',
+            '[class*="Line"]',
+            '[class*="item"]'
+        ];
+
+        for (const selector of containerSelectors) {
+            document.querySelectorAll(selector).forEach(container => {
+                const children = container.children;
+                if (children.length >= 2) {
+                    const firstChild = children[0];
+                    const secondChild = children[1];
+                    const timeText = firstChild.textContent?.trim() || '';
+
+                    if (/^\d+:\d+$/.test(timeText) && secondChild.textContent?.trim()) {
+                        subtitles.push({
+                            start: this.parseTimeToSeconds(timeText),
+                            duration: 3,
+                            text: secondChild.textContent.trim()
+                        });
+                    }
+                }
+            });
+
+            if (subtitles.length > 0) break;
+        }
+
+        // Remove duplicates
+        const seen = new Set<string>();
+        return subtitles.filter(sub => {
+            const key = `${sub.start}-${sub.text}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    /**
+     * Parse time string (MM:SS) to seconds
+     */
+    private parseTimeToSeconds(timeStr: string): number {
+        const parts = timeStr.split(':').map(Number);
+        if (parts.length === 2) {
+            return parts[0] * 60 + parts[1];
+        } else if (parts.length === 3) {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        }
+        return 0;
+    }
+
+    /**
+     * Close the AI assistant panel
+     */
+    private closeAIPanel(): void {
+        const closeButton = document.querySelector('.close-btn') as HTMLElement;
+        if (closeButton) {
+            closeButton.click();
+        }
     }
 }
 

@@ -301,6 +301,40 @@ function captureVideoFrame() {
             electron_1.ipcRenderer.send('video-capture-result', { error: error.error || error.message });
         }
     });
+    // Bilibili subtitle extraction command
+    electron_1.ipcRenderer.on('extract-bilibili-subtitles', async () => {
+        console.log('[Verboo] Bilibili subtitle extraction command received');
+        try {
+            const adapter = getCurrentAdapter();
+            if (adapter.platform.id !== 'bilibili') {
+                electron_1.ipcRenderer.send('bilibili-subtitle-result', {
+                    error: '请在Bilibili视频页面使用此功能'
+                });
+                return;
+            }
+            // Check if adapter has extractSubtitles method
+            if ('extractSubtitles' in adapter && typeof adapter.extractSubtitles === 'function') {
+                const subtitles = await adapter.extractSubtitles();
+                console.log('[Verboo] Extracted', subtitles.length, 'subtitles from Bilibili');
+                electron_1.ipcRenderer.send('bilibili-subtitle-result', {
+                    success: true,
+                    data: subtitles,
+                    count: subtitles.length
+                });
+            }
+            else {
+                electron_1.ipcRenderer.send('bilibili-subtitle-result', {
+                    error: 'Bilibili适配器不支持字幕提取'
+                });
+            }
+        }
+        catch (error) {
+            console.error('[Verboo] Bilibili subtitle extraction failed:', error);
+            electron_1.ipcRenderer.send('bilibili-subtitle-result', {
+                error: error.message || '提取字幕失败'
+            });
+        }
+    });
     // ============ Bilibili AI Subtitle Interception ============
     // Intercept fetch requests to capture AI subtitle data from aisubtitle.hdslb.com
     const originalFetch = window.fetch;

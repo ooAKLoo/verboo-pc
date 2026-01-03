@@ -229,6 +229,12 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
     webContents.ipc.on('video-capture-result', (event, result) => {
         mainWindow?.webContents.send('wcv-video-capture-result', tabId, result);
     });
+
+    // Bilibili subtitle extraction result
+    webContents.ipc.on('bilibili-subtitle-result', (event, result) => {
+        console.log('[Main] Bilibili subtitle result received:', result.success ? `${result.count} items` : result.error);
+        mainWindow?.webContents.send('wcv-bilibili-subtitle-result', tabId, result);
+    });
 }
 
 /**

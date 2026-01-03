@@ -231,6 +231,32 @@ function App() {
     }
   };
 
+  const handleGetBilibiliSubtitles = async () => {
+    if (!browserRef.current) return;
+
+    try {
+      const url = browserRef.current.getCurrentUrl();
+
+      if (!url.includes('bilibili.com/video')) {
+        throw new Error('请先打开 B站 视频页面');
+      }
+
+      console.log('[App] Extracting Bilibili subtitles...');
+      const subtitles = await browserRef.current.extractBilibiliSubtitles();
+
+      console.log('[App] Got Bilibili subtitles:', subtitles.length);
+      setSubtitleData(subtitles);
+      if (rightCollapsed) setRightCollapsed(false);
+
+      // Save/update subtitles to database
+      await saveSubtitlesToDatabase(url, pageTitle, 'bilibili', subtitles);
+      lastLoadedUrlRef.current = url;
+    } catch (error) {
+      console.error('[App] Failed to get Bilibili subtitles:', error);
+      throw error;
+    }
+  };
+
   const handleImportSubtitles = async (subtitles: SubtitleItem[]) => {
     setSubtitleData(subtitles);
     if (rightCollapsed) setRightCollapsed(false);
@@ -472,6 +498,7 @@ function App() {
         }}
         onSubtitlesImport={handleImportSubtitles}
         onAutoFetch={handleGetYouTubeSubtitles}
+        onBilibiliFetch={handleGetBilibiliSubtitles}
         currentUrl={browserRef.current?.getCurrentUrl() || ''}
       />
 

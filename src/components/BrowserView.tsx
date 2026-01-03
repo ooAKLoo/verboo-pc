@@ -15,6 +15,7 @@ export interface BrowserViewHandle {
     executeScript: (script: string) => Promise<any>;
     getCurrentUrl: () => string;
     captureVideoFrame: () => Promise<any>;
+    extractBilibiliSubtitles: () => Promise<any>;
     goBack: () => void;
     goForward: () => void;
     reload: () => void;
@@ -46,6 +47,10 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
         const containerRef = useRef<HTMLDivElement>(null);
         const isCreatedRef = useRef(false);
         const pendingCaptureRef = useRef<{
+            resolve: (value: any) => void;
+            reject: (reason: any) => void;
+        } | null>(null);
+        const pendingSubtitleRef = useRef<{
             resolve: (value: any) => void;
             reject: (reason: any) => void;
         } | null>(null);
@@ -194,6 +199,17 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                 }
             };
 
+            const handleBilibiliSubtitleResult = (event: any, viewId: string, result: any) => {
+                if (viewId === VIEW_ID && pendingSubtitleRef.current) {
+                    if (result.error) {
+                        pendingSubtitleRef.current.reject(new Error(result.error));
+                    } else {
+                        pendingSubtitleRef.current.resolve(result.data);
+                    }
+                    pendingSubtitleRef.current = null;
+                }
+            };
+
             ipcRenderer.on('wcv-did-start-loading', handleDidStartLoading);
             ipcRenderer.on('wcv-did-stop-loading', handleDidStopLoading);
             ipcRenderer.on('wcv-did-navigate', handleDidNavigate);
@@ -201,6 +217,7 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
             ipcRenderer.on('wcv-page-title-updated', handlePageTitleUpdated);
             ipcRenderer.on('wcv-ipc-message', handleIpcMessage);
             ipcRenderer.on('wcv-video-capture-result', handleVideoCaptureResult);
+            ipcRenderer.on('wcv-bilibili-subtitle-result', handleBilibiliSubtitleResult);
 
             return () => {
                 ipcRenderer.removeListener('wcv-did-start-loading', handleDidStartLoading);
@@ -210,6 +227,7 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                 ipcRenderer.removeListener('wcv-page-title-updated', handlePageTitleUpdated);
                 ipcRenderer.removeListener('wcv-ipc-message', handleIpcMessage);
                 ipcRenderer.removeListener('wcv-video-capture-result', handleVideoCaptureResult);
+                ipcRenderer.removeListener('wcv-bilibili-subtitle-result', handleBilibiliSubtitleResult);
             };
         }, []);
 
@@ -240,6 +258,20 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
                             pendingCaptureRef.current = null;
                         }
                     }, 5000);
+                });
+            },
+            extractBilibiliSubtitles: () => {
+                return new Promise((resolve, reject) => {
+                    pendingSubtitleRef.current = { resolve, reject };
+                    ipcRenderer.invoke('wcv-send', VIEW_ID, 'extract-bilibili-subtitles');
+
+                    // Longer timeout for subtitle extraction (needs to click and wait for panel)
+                    setTimeout(() => {
+                        if (pendingSubtitleRef.current) {
+                            pendingSubtitleRef.current.reject(new Error('提取超时，请重试'));
+                            pendingSubtitleRef.current = null;
+                        }
+                    }, 10000);
                 });
             },
             goBack: () => {

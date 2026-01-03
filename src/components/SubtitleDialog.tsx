@@ -7,6 +7,7 @@ interface SubtitleDialogProps {
   onClose: () => void;
   onSubtitlesImport: (subtitles: SubtitleItem[]) => void;
   onAutoFetch?: () => Promise<void>;
+  onBilibiliFetch?: () => Promise<void>;
   currentUrl?: string;
 }
 
@@ -17,6 +18,7 @@ export function SubtitleDialog({
   onClose,
   onSubtitlesImport,
   onAutoFetch,
+  onBilibiliFetch,
   currentUrl = ''
 }: SubtitleDialogProps) {
   const [activeTab, setActiveTab] = useState<TabType>('auto');
@@ -26,6 +28,8 @@ export function SubtitleDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isYouTube = currentUrl.includes('youtube.com/watch');
+  const isBilibili = currentUrl.includes('bilibili.com/video');
+  const canAutoFetch = isYouTube || isBilibili;
 
   // 处理文件拖拽
   const handleDragOver = (e: React.DragEvent) => {
@@ -85,7 +89,7 @@ export function SubtitleDialog({
     }
   };
 
-  // 处理自动获取
+  // 处理自动获取 (YouTube)
   const handleAutoFetch = async () => {
     if (!onAutoFetch) return;
 
@@ -95,6 +99,29 @@ export function SubtitleDialog({
     try {
       await onAutoFetch();
       setMessage({ type: 'success', text: '字幕获取成功' });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : '获取失败'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 处理 Bilibili 字幕获取
+  const handleBilibiliFetch = async () => {
+    if (!onBilibiliFetch) return;
+
+    setMessage(null);
+    setIsLoading(true);
+
+    try {
+      await onBilibiliFetch();
+      setMessage({ type: 'success', text: 'B站字幕获取成功' });
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -181,31 +208,63 @@ export function SubtitleDialog({
               </div>
 
               {/* Fetch Button */}
-              <button
-                onClick={handleAutoFetch}
-                disabled={!isYouTube || isLoading}
-                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-[13px] font-medium transition-all duration-150 ${
-                  !isYouTube || isLoading
-                    ? 'bg-[#f4f4f5] text-[#a1a1aa] cursor-not-allowed'
-                    : 'bg-[#18181b] text-white hover:bg-[#27272a] active:scale-[0.98]'
-                }`}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>获取中...</span>
-                  </>
-                ) : (
-                  <span>获取 YouTube 字幕</span>
-                )}
-              </button>
+              {isYouTube && (
+                <button
+                  onClick={handleAutoFetch}
+                  disabled={isLoading}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                    isLoading
+                      ? 'bg-[#f4f4f5] text-[#a1a1aa] cursor-not-allowed'
+                      : 'bg-[#18181b] text-white hover:bg-[#27272a] active:scale-[0.98]'
+                  }`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>获取中...</span>
+                    </>
+                  ) : (
+                    <span>获取 YouTube 字幕</span>
+                  )}
+                </button>
+              )}
+
+              {isBilibili && (
+                <button
+                  onClick={handleBilibiliFetch}
+                  disabled={isLoading}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                    isLoading
+                      ? 'bg-[#f4f4f5] text-[#a1a1aa] cursor-not-allowed'
+                      : 'bg-[#fb7299] text-white hover:bg-[#f95d89] active:scale-[0.98]'
+                  }`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>获取中...</span>
+                    </>
+                  ) : (
+                    <span>获取 B站 AI 字幕</span>
+                  )}
+                </button>
+              )}
 
               {/* Info Notice */}
-              {!isYouTube && (
+              {!canAutoFetch && (
                 <div className="flex items-start gap-2 px-3 py-2.5 bg-[#fef3c7] rounded-lg">
                   <AlertCircle size={16} className="text-[#f59e0b] mt-0.5 flex-shrink-0" />
                   <p className="text-[12px] text-[#92400e]">
-                    目前仅支持 YouTube 视频，请先打开 YouTube 视频页面
+                    请先打开 YouTube 或 B站 视频页面
+                  </p>
+                </div>
+              )}
+
+              {isBilibili && (
+                <div className="flex items-start gap-2 px-3 py-2.5 bg-[#e0f2fe] rounded-lg">
+                  <AlertCircle size={16} className="text-[#0284c7] mt-0.5 flex-shrink-0" />
+                  <p className="text-[12px] text-[#0369a1]">
+                    将自动打开 AI 小助手面板并提取字幕列表
                   </p>
                 </div>
               )}
