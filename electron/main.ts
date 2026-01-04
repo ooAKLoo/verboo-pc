@@ -79,7 +79,7 @@ let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
 /**
  * Create a new WebContentsView for a tab
  */
-function createWebContentsView(tabId: string, url: string): void {
+function createWebContentsView(tabId: string, url: string, initialVisible: boolean = true): void {
     if (!mainWindow) return;
 
     // Remove existing view if any
@@ -124,8 +124,8 @@ function createWebContentsView(tabId: string, url: string): void {
         activeTabId = tabId;
     }
 
-    // Show only if this is the active tab
-    if (tabId === activeTabId) {
+    // Set visibility based on initialVisible parameter
+    if (initialVisible && tabId === activeTabId) {
         view.setVisible(true);
     } else {
         view.setVisible(false);
@@ -360,9 +360,9 @@ function setupIpcHandlers() {
     // ============ WebContentsView IPC Handlers ============
 
     // Create a new WebContentsView for a tab
-    ipcMain.handle('wcv-create', async (event, tabId: string, url: string) => {
+    ipcMain.handle('wcv-create', async (event, tabId: string, url: string, initialVisible: boolean = true) => {
         try {
-            createWebContentsView(tabId, url);
+            createWebContentsView(tabId, url, initialVisible);
             return { success: true };
         } catch (error) {
             console.error('[IPC] wcv-create failed:', error);

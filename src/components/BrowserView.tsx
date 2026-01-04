@@ -32,6 +32,7 @@ export interface NavigationState {
 
 interface BrowserViewProps {
     initialUrl: string;
+    initialVisible?: boolean;
     onData?: (data: any) => void;
     onTitleChange?: (title: string) => void;
     onUrlChange?: (url: string) => void;
@@ -39,7 +40,7 @@ interface BrowserViewProps {
 }
 
 export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>(
-    ({ initialUrl, onData, onTitleChange, onUrlChange, onNavigationStateChange }, ref) => {
+    ({ initialUrl, initialVisible = true, onData, onTitleChange, onUrlChange, onNavigationStateChange }, ref) => {
         const [inputUrl, setInputUrl] = useState(initialUrl);
         const [isLoading, setIsLoading] = useState(false);
         const [canGoBack, setCanGoBack] = useState(false);
@@ -69,8 +70,8 @@ export const BrowserView = React.forwardRef<BrowserViewHandle, BrowserViewProps>
         useEffect(() => {
             if (!isCreatedRef.current) {
                 isCreatedRef.current = true;
-                ipcRenderer.invoke('wcv-create', VIEW_ID, initialUrl);
-                console.log('[BrowserView] Created WebContentsView');
+                ipcRenderer.invoke('wcv-create', VIEW_ID, initialUrl, initialVisible);
+                console.log('[BrowserView] Created WebContentsView, visible:', initialVisible);
             }
 
             return () => {

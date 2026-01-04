@@ -95,7 +95,7 @@ function FilterPopover({
             {trigger}
 
             {isOpen && (
-                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl shadow-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     {children}
                 </div>
             )}
@@ -1097,7 +1097,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullPr
                                 {/* Edit Overlay on Hover */}
                                 {onEditScreenshot && (
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-lg text-sm font-medium text-zinc-900">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-sm font-medium text-zinc-900">
                                             <Edit3 size={16} />
                                             点击编辑
                                         </div>
@@ -1537,7 +1537,7 @@ function FloatingActionBar({
     return (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
             {/* 深色玻璃质感容器 - 灵动岛风格 */}
-            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-white/10 text-zinc-200 ring-1 ring-black">
+            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/90 backdrop-blur-md rounded-2xl border border-white/10 text-zinc-200 ring-1 ring-black">
 
                 {/* 1. 左侧计数与全选控制区 */}
                 <div className="relative flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-xl mr-1">
@@ -1560,7 +1560,7 @@ function FloatingActionBar({
                     {/* 微型关闭按钮 - 右上角徽章风格 */}
                     <button
                         onClick={onClearSelection}
-                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-zinc-600 hover:bg-zinc-500 text-white flex items-center justify-center shadow-sm transition-colors ring-2 ring-zinc-900"
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-zinc-600 hover:bg-zinc-500 text-white flex items-center justify-center transition-colors ring-2 ring-zinc-900"
                         title="清空选择"
                     >
                         <X size={10} strokeWidth={2.5} />

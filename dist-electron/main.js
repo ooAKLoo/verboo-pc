@@ -47,7 +47,7 @@ let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
 /**
  * Create a new WebContentsView for a tab
  */
-function createWebContentsView(tabId, url) {
+function createWebContentsView(tabId, url, initialVisible = true) {
     if (!mainWindow)
         return;
     // Remove existing view if any
@@ -82,8 +82,8 @@ function createWebContentsView(tabId, url) {
     if (!activeTabId) {
         activeTabId = tabId;
     }
-    // Show only if this is the active tab
-    if (tabId === activeTabId) {
+    // Set visibility based on initialVisible parameter
+    if (initialVisible && tabId === activeTabId) {
         view.setVisible(true);
     }
     else {
@@ -283,9 +283,9 @@ function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
     // ============ WebContentsView IPC Handlers ============
     // Create a new WebContentsView for a tab
-    electron_1.ipcMain.handle('wcv-create', async (event, tabId, url) => {
+    electron_1.ipcMain.handle('wcv-create', async (event, tabId, url, initialVisible = true) => {
         try {
-            createWebContentsView(tabId, url);
+            createWebContentsView(tabId, url, initialVisible);
             return { success: true };
         }
         catch (error) {

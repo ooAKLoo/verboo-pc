@@ -148,7 +148,7 @@ function FilterPopover({
             {trigger}
 
             {isOpen && (
-                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl shadow-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     {children}
                 </div>
             )}
@@ -710,7 +710,7 @@ function WordHoverContent({ word }: { word: DifficultWord }) {
 
     return (
         <HoverCard.Content
-            className="w-[320px] bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+            className="w-[320px] bg-white rounded-xl border border-gray-200 overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
             sideOffset={8}
             align="start"
         >

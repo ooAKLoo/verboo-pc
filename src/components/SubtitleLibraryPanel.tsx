@@ -121,7 +121,7 @@ function FilterPopover({
             {trigger}
 
             {isOpen && (
-                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl shadow-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full left-0 mt-2 z-50 min-w-[180px] bg-white rounded-xl border border-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     {children}
                 </div>
             )}

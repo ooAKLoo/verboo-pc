@@ -122,6 +122,8 @@ interface SidebarProps {
     pageTitle?: string;
     currentVideoTime?: number;
     videoDuration?: number;
+    // WelcomePage state
+    showWelcome?: boolean;
 }
 
 export function Sidebar({
@@ -144,7 +146,8 @@ export function Sidebar({
     currentUrl,
     pageTitle,
     currentVideoTime,
-    videoDuration
+    videoDuration,
+    showWelcome = false
 }: SidebarProps) {
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
 
@@ -324,8 +327,8 @@ export function Sidebar({
             )}
 
             {/* Navigation Toolbar - Fixed at bottom */}
-            <div className="px-2">
-                <div className="bg-white/90 backdrop-blur-md shadow-lg border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3">
+            <div className={`px-2 overflow-hidden transition-all duration-500 ease-out ${showWelcome ? 'opacity-0 max-h-0 py-0' : 'opacity-100 max-h-20 py-0'}`}>
+                <div className="bg-white/90 backdrop-blur-md border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3">
                     <div className="flex items-center gap-1">
                         <button
                             onClick={onGoBack}

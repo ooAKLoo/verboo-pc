@@ -7,6 +7,7 @@ import { InfoPanel } from './components/InfoPanel';
 import { LearningPanel } from './components/LearningPanel';
 import { AssetPanelFull } from './components/AssetPanelFull';
 import { SubtitleLibraryPanel } from './components/SubtitleLibraryPanel';
+import { WelcomePage } from './components/WelcomePage';
 import { SubtitleDialog } from './components/SubtitleDialog';
 import { ScreenshotDialog } from './components/ScreenshotDialog';
 import type { ScreenshotSaveData } from './components/ScreenshotDialog';
@@ -28,8 +29,12 @@ interface PendingAISubtitle {
 }
 
 function App() {
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  // Welcome page state
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [isWelcomeExiting, setIsWelcomeExiting] = useState(false);
+
+  const [leftCollapsed, setLeftCollapsed] = useState(true); // Start collapsed when welcome is shown
+  const [rightCollapsed, setRightCollapsed] = useState(true); // Start collapsed when welcome is shown
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
   const [showEnglishLearning, setShowEnglishLearning] = useState(false);
   const [learningMode, setLearningMode] = useState(false);
@@ -69,6 +74,17 @@ function App() {
 
   const browserRef = useRef<BrowserViewHandle>(null);
   const { ipcRenderer } = window.require('electron');
+
+  // Hide WebContentsView when welcome page is shown
+  useEffect(() => {
+    if (showWelcome) {
+      // Small delay to ensure WebContentsView is created first
+      const timer = setTimeout(() => {
+        ipcRenderer.invoke('wcv-hide-all');
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showWelcome, ipcRenderer]);
 
   // Show toast notification
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success') => {
@@ -189,6 +205,31 @@ function App() {
 
   const handleReload = () => {
     browserRef.current?.reload();
+  };
+
+  // Handle navigation from welcome page
+  const handleWelcomeNavigate = (url: string, seekTo?: number) => {
+    // Start exit animation
+    setIsWelcomeExiting(true);
+
+    // Store seek position if provided
+    if (seekTo && seekTo > 0) {
+      pendingSeekRef.current = seekTo;
+    }
+
+    // After animation, hide welcome and show browser
+    setTimeout(() => {
+      setShowWelcome(false);
+      setIsWelcomeExiting(false);
+      setLeftCollapsed(false);
+      setRightCollapsed(false);
+
+      // Show WebContentsView and navigate to the URL
+      ipcRenderer.invoke('wcv-show-active');
+      if (browserRef.current) {
+        browserRef.current.navigate(url);
+      }
+    }, 500); // Match the animation duration
   };
 
   const handleRunPlugin = async (script: string) => {
@@ -530,7 +571,7 @@ function App() {
       {/* AI Subtitle Confirmation Prompt */}
       {pendingAISubtitle && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-lg border border-gray-200">
+          <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
               <span className="text-sm text-gray-700">
@@ -564,7 +605,7 @@ function App() {
         <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <button
             onClick={() => setLeftCollapsed(!leftCollapsed)}
-            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200 shadow-sm"
+            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
           >
             <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
           </button>
@@ -587,7 +628,7 @@ function App() {
                 setRightCollapsed(!rightCollapsed);
               }
             }}
-            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200 shadow-sm"
+            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
           >
             <PanelRight size={16} className={(rightCollapsed && !learningMode && !assetMode && !subtitleMode) ? "opacity-50" : "opacity-100"} />
           </button>
@@ -645,14 +686,22 @@ function App() {
             pageTitle={pageTitle}
             currentVideoTime={currentVideoTime}
             videoDuration={videoDuration}
+            showWelcome={showWelcome}
           />
         }
         main={
           <div className="flex flex-col h-full">
             <div className="flex-1 relative">
+              {showWelcome && (
+                <WelcomePage
+                  onNavigate={handleWelcomeNavigate}
+                  isExiting={isWelcomeExiting}
+                />
+              )}
               <BrowserView
                 ref={browserRef}
-                initialUrl="https://www.google.com"
+                initialUrl="about:blank"
+                initialVisible={!showWelcome}
                 onTitleChange={handleTitleChange}
                 onUrlChange={handleUrlChange}
                 onNavigationStateChange={handleNavigationStateChange}

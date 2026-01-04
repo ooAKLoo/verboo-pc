@@ -333,9 +333,30 @@ class BilibiliAdapter {
      * Close the AI assistant panel
      */
     closeAIPanel() {
-        const closeButton = document.querySelector('.close-btn');
-        if (closeButton) {
-            closeButton.click();
+        // 尝试多种关闭按钮选择器（按优先级排序）
+        const closeSelectors = [
+            // B站AI助手面板的关闭按钮 (类名包含 CloseBtn)
+            '[class*="_CloseBtn_"]',
+            '[class*="CloseBtn"]',
+            // 通用关闭按钮
+            '.close-btn',
+            '[class*="close-btn"]',
+            '[aria-label="关闭"]',
+            '[title="关闭"]',
+        ];
+        for (const selector of closeSelectors) {
+            const closeButton = document.querySelector(selector);
+            if (closeButton) {
+                console.log('[BilibiliAdapter] Closing panel with selector:', selector);
+                closeButton.click();
+                return;
+            }
+        }
+        // 如果找不到关闭按钮，尝试再次点击AI助手按钮来切换关闭
+        console.log('[BilibiliAdapter] No close button found, trying to toggle AI assistant');
+        const aiAssistant = document.querySelector('.video-ai-assistant');
+        if (aiAssistant) {
+            aiAssistant.click();
         }
     }
 }
