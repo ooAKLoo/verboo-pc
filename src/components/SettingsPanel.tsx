@@ -9,9 +9,11 @@ import {
     BarChart3,
     Info,
     RefreshCw,
-    ChevronRight
+    ChevronRight,
+    Globe
 } from 'lucide-react';
 import { isAnalyticsEnabled, setAnalyticsEnabled } from '../services/analytics';
+import { useTranslation, type Locale } from '../contexts/I18nContext';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -29,6 +31,7 @@ interface UpdateState {
 
 export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     const { ipcRenderer } = window.require('electron');
+    const { locale, setLocale, t } = useTranslation();
 
     const [appVersion, setAppVersion] = useState('');
     const [analyticsOn, setAnalyticsOn] = useState(isAnalyticsEnabled());
@@ -61,18 +64,23 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         try {
             await ipcRenderer.invoke('check-for-updates');
         } catch (error) {
-            setUpdateState({ status: 'error', error: '检查失败' });
+            setUpdateState({ status: 'error', error: t('settings.checkFailed') });
         }
-    }, [ipcRenderer]);
+    }, [ipcRenderer, t]);
 
     // 下载更新
     const handleDownloadUpdate = useCallback(async () => {
         try {
             await ipcRenderer.invoke('download-update');
         } catch (error) {
-            setUpdateState({ status: 'error', error: '下载失败' });
+            setUpdateState({ status: 'error', error: t('settings.downloadFailed') });
         }
-    }, [ipcRenderer]);
+    }, [ipcRenderer, t]);
+
+    // 切换语言
+    const handleLanguageChange = useCallback((newLocale: Locale) => {
+        setLocale(newLocale);
+    }, [setLocale]);
 
     // 安装更新
     const handleInstallUpdate = useCallback(() => {
@@ -108,7 +116,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             <div className="relative w-[400px] max-h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* 头部 */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                    <h2 className="text-base font-semibold text-gray-900">设置</h2>
+                    <h2 className="text-base font-semibold text-gray-900">{t('settings.title')}</h2>
                     <button
                         onClick={onClose}
                         className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
@@ -123,7 +131,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <Info size={14} className="text-gray-400" />
-                            <h3 className="text-sm font-medium text-gray-500">关于</h3>
+                            <h3 className="text-sm font-medium text-gray-500">{t('settings.about')}</h3>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
                             <div className="flex items-center gap-3">
@@ -131,9 +139,46 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                 <div>
                                     <div className="text-sm font-medium text-gray-900">Verboo</div>
                                     <div className="text-xs text-gray-500">
-                                        版本 {appVersion || '0.0.0'}
+                                        {t('settings.version')} {appVersion || '0.0.0'}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 语言 */}
+                    <section>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Globe size={14} className="text-gray-400" />
+                            <h3 className="text-sm font-medium text-gray-500">{t('settings.language')}</h3>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm text-gray-700">{t('settings.languageDesc')}</div>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 mt-3">
+                                <button
+                                    onClick={() => handleLanguageChange('zh')}
+                                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors ${
+                                        locale === 'zh'
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                    }`}
+                                >
+                                    {t('settings.chinese')}
+                                </button>
+                                <button
+                                    onClick={() => handleLanguageChange('en')}
+                                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors ${
+                                        locale === 'en'
+                                            ? 'bg-blue-500 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                    }`}
+                                >
+                                    {t('settings.english')}
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -142,7 +187,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <Download size={14} className="text-gray-400" />
-                            <h3 className="text-sm font-medium text-gray-500">软件更新</h3>
+                            <h3 className="text-sm font-medium text-gray-500">{t('settings.update')}</h3>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
                             {updateState.status === 'idle' && (
@@ -150,7 +195,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                     onClick={handleCheckUpdate}
                                     className="w-full flex items-center justify-between py-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
                                 >
-                                    <span>检查更新</span>
+                                    <span>{t('settings.checkUpdate')}</span>
                                     <ChevronRight size={16} className="text-gray-400" />
                                 </button>
                             )}
@@ -158,7 +203,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             {updateState.status === 'checking' && (
                                 <div className="flex items-center gap-2 py-2 text-sm text-gray-500">
                                     <Loader2 size={14} className="animate-spin" />
-                                    <span>正在检查...</span>
+                                    <span>{t('settings.checking')}</span>
                                 </div>
                             )}
 
@@ -166,7 +211,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                 <div className="flex items-center justify-between py-2">
                                     <div className="flex items-center gap-2 text-sm text-green-600">
                                         <Check size={14} />
-                                        <span>已是最新版本</span>
+                                        <span>{t('settings.upToDate')}</span>
                                     </div>
                                     <button
                                         onClick={handleCheckUpdate}
@@ -180,13 +225,13 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             {updateState.status === 'available' && (
                                 <div className="space-y-3">
                                     <div className="text-sm text-gray-700">
-                                        发现新版本 <span className="font-medium">{updateState.version}</span>
+                                        {t('settings.newVersion')} <span className="font-medium">{updateState.version}</span>
                                     </div>
                                     <button
                                         onClick={handleDownloadUpdate}
                                         className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
                                     >
-                                        下载更新
+                                        {t('settings.downloadUpdate')}
                                     </button>
                                 </div>
                             )}
@@ -194,7 +239,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             {updateState.status === 'downloading' && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-500">正在下载...</span>
+                                        <span className="text-gray-500">{t('settings.downloading')}</span>
                                         <span className="text-gray-700 font-medium">{updateState.progress}%</span>
                                     </div>
                                     <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -209,25 +254,25 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             {updateState.status === 'downloaded' && (
                                 <div className="space-y-3">
                                     <div className="text-sm text-green-600">
-                                        更新已下载完成
+                                        {t('settings.downloaded')}
                                     </div>
                                     <button
                                         onClick={handleInstallUpdate}
                                         className="w-full py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
                                     >
-                                        立即重启并安装
+                                        {t('settings.installNow')}
                                     </button>
                                 </div>
                             )}
 
                             {updateState.status === 'error' && (
                                 <div className="flex items-center justify-between py-2">
-                                    <span className="text-sm text-red-500">{updateState.error || '更新失败'}</span>
+                                    <span className="text-sm text-red-500">{updateState.error || t('settings.updateFailed')}</span>
                                     <button
                                         onClick={handleCheckUpdate}
                                         className="text-sm text-blue-500 hover:text-blue-600"
                                     >
-                                        重试
+                                        {t('common.retry')}
                                     </button>
                                 </div>
                             )}
@@ -238,14 +283,14 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <BarChart3 size={14} className="text-gray-400" />
-                            <h3 className="text-sm font-medium text-gray-500">数据与隐私</h3>
+                            <h3 className="text-sm font-medium text-gray-500">{t('settings.privacy')}</h3>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <div className="text-sm text-gray-700">帮助改进产品</div>
+                                    <div className="text-sm text-gray-700">{t('settings.analytics')}</div>
                                     <div className="text-xs text-gray-400 mt-0.5">
-                                        匿名收集使用数据以改进体验
+                                        {t('settings.analyticsDesc')}
                                     </div>
                                 </div>
                                 <button
@@ -268,14 +313,14 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <MessageSquare size={14} className="text-gray-400" />
-                            <h3 className="text-sm font-medium text-gray-500">反馈与帮助</h3>
+                            <h3 className="text-sm font-medium text-gray-500">{t('settings.feedback')}</h3>
                         </div>
                         <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
                             <button
                                 onClick={openFeedback}
                                 className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors rounded-t-xl"
                             >
-                                <span>提交反馈或建议</span>
+                                <span>{t('settings.submitFeedback')}</span>
                                 <ExternalLink size={14} className="text-gray-400" />
                             </button>
                             <button

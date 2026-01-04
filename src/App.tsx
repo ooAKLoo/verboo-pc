@@ -17,6 +17,7 @@ import { PanelLeft, PanelRight, Settings } from 'lucide-react';
 import { SettingsPanel } from './components/SettingsPanel';
 import { analytics, initErrorHandling } from './services/analytics';
 import { AppProvider, useApp } from './contexts';
+import { I18nProvider } from './contexts/I18nContext';
 
 interface ToastState {
   id: string;
@@ -406,9 +407,11 @@ function App() {
   const { ipcRenderer } = window.require('electron');
 
   return (
-    <AppProvider ipcRenderer={ipcRenderer}>
-      <AppContent />
-    </AppProvider>
+    <I18nProvider>
+      <AppProvider ipcRenderer={ipcRenderer}>
+        <AppContent />
+      </AppProvider>
+    </I18nProvider>
   );
 }
 

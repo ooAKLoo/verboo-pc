@@ -1,5 +1,6 @@
 import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
 import path from 'path';
+import { t, setLocale, loadLocaleFromStorage, saveLocaleToStorage, type Locale } from './i18n';
 
 // 自动更新 (仅在生产环境启用)
 let updaterInitialized = false;
@@ -208,7 +209,7 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
 
         if (canCapture) {
             menu.append(new MenuItem({
-                label: '📥 保存素材',
+                label: t('contextMenu.saveAsset'),
                 click: () => {
                     webContents.send('execute-capture');
                 }
@@ -217,7 +218,7 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
         }
 
         menu.append(new MenuItem({
-            label: '在新标签页中打开链接',
+            label: t('contextMenu.openInNewTab'),
             enabled: false,
         }));
 
@@ -368,6 +369,9 @@ app.whenReady().then(() => {
         app.dock.setIcon(iconPath);
     }
 
+    // Load saved locale
+    loadLocaleFromStorage();
+
     // Initialize databases
     initDatabase();
     initVocabDatabase();
@@ -390,6 +394,18 @@ app.whenReady().then(() => {
  */
 function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
+
+    // ============ Locale IPC Handler ============
+    ipcMain.handle('set-locale', async (event, locale: Locale) => {
+        try {
+            setLocale(locale);
+            saveLocaleToStorage(locale);
+            return { success: true };
+        } catch (error) {
+            console.error('[IPC] set-locale failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
 
     // ============ WebContentsView IPC Handlers ============
 
