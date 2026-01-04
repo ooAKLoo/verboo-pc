@@ -16,7 +16,7 @@ interface RecentSite {
 }
 
 const RECENT_SITES_KEY = 'verboo_recent_sites';
-const MAX_RECENT_SITES = 2;
+const MAX_RECENT_SITES = 3;
 
 // Get domain from URL for display
 function getDomain(url: string): string {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check, Edit3 } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
+import { useTranslation } from '../contexts/I18nContext';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -11,16 +12,16 @@ type SortType = 'created' | 'timestamp';
 
 // Sort options for assets
 const SORT_OPTIONS = [
-    { value: 'created', label: '入库时间', desc: '按添加到素材库的时间' },
-    { value: 'timestamp', label: '视频时间', desc: '按视频截图时间点' },
+    { value: 'created', labelKey: 'assets.sortCreated', descKey: 'assets.sortCreatedDesc' },
+    { value: 'timestamp', labelKey: 'assets.sortTimestamp', descKey: 'assets.sortTimestampDesc' },
 ];
 
 // Mark filter options
 const MARK_OPTIONS = [
-    { value: 'all', label: '全部标记', icon: null },
-    { value: 'important', label: '重点', icon: Star, color: 'text-amber-500' },
-    { value: 'difficult', label: '难点', icon: AlertTriangle, color: 'text-red-500' },
-    { value: 'none', label: '无标记', icon: null },
+    { value: 'all', labelKey: 'assets.markAll', icon: null },
+    { value: 'important', labelKey: 'assets.markImportant', icon: Star, color: 'text-amber-500' },
+    { value: 'difficult', labelKey: 'assets.markDifficult', icon: AlertTriangle, color: 'text-red-500' },
+    { value: 'none', labelKey: 'assets.markNone', icon: null },
 ];
 
 
@@ -109,15 +110,17 @@ function FilterPopover({
 function SortSelector({
     options,
     selected,
-    onChange
+    onChange,
+    t
 }: {
     options: typeof SORT_OPTIONS;
     selected: string;
     onChange: (value: string) => void;
+    t: (key: string) => string;
 }) {
     return (
         <div className="p-2 min-w-[180px]">
-            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">排序方式</div>
+            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('assets.sortBy')}</div>
             <div className="space-y-0.5">
                 {options.map(option => {
                     const isSelected = selected === option.value;
@@ -128,8 +131,8 @@ function SortSelector({
                             className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all duration-150 hover:bg-zinc-50 text-zinc-700"
                         >
                             <div>
-                                <div className="text-sm font-medium">{option.label}</div>
-                                <div className="text-xs text-zinc-400">{option.desc}</div>
+                                <div className="text-sm font-medium">{t(option.labelKey)}</div>
+                                <div className="text-xs text-zinc-400">{t(option.descKey)}</div>
                             </div>
                             {isSelected && (
                                 <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-none">
@@ -152,15 +155,17 @@ function SortSelector({
 function MarkSelector({
     selected,
     markStats,
-    onChange
+    onChange,
+    t
 }: {
     selected: string;
     markStats: Record<string, number>;
     onChange: (value: string) => void;
+    t: (key: string) => string;
 }) {
     return (
         <div className="p-2 min-w-[180px]">
-            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">筛选标记</div>
+            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('assets.filterMark')}</div>
             <div className="space-y-0.5">
                 {MARK_OPTIONS.map(option => {
                     const isSelected = selected === option.value;
@@ -184,7 +189,7 @@ function MarkSelector({
                         >
                             <div className="flex items-center gap-2">
                                 {IconComponent && <IconComponent size={14} className={option.color} />}
-                                <span className="text-sm font-medium">{option.label}</span>
+                                <span className="text-sm font-medium">{t(option.labelKey)}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-zinc-400">{count}</span>
@@ -214,7 +219,8 @@ function ScreenshotDetailView({
     onClose,
     onDelete,
     onDownload,
-    onUpdate
+    onUpdate,
+    t
 }: {
     asset: Asset;
     onBack: () => void;
@@ -222,6 +228,7 @@ function ScreenshotDetailView({
     onDelete: (id: number) => void;
     onDownload: (asset: Asset) => void;
     onUpdate: (asset: Asset) => void;
+    t: (key: string) => string;
 }) {
     const screenshotData = asset.typeData as ScreenshotTypeData;
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -455,7 +462,7 @@ function ScreenshotDetailView({
             });
 
             if (response.success) {
-                setSaveMessage('已保存');
+                setSaveMessage(t('assets.saved'));
                 // Update the asset in parent
                 const updatedAsset = {
                     ...asset,
@@ -469,11 +476,11 @@ function ScreenshotDetailView({
                 onUpdate(updatedAsset);
                 setTimeout(() => setSaveMessage(null), 2000);
             } else {
-                setSaveMessage('保存失败');
+                setSaveMessage(t('assets.saveFailed'));
             }
         } catch (error) {
             console.error('Error saving:', error);
-            setSaveMessage('保存失败');
+            setSaveMessage(t('assets.saveFailed'));
         } finally {
             setIsSaving(false);
         }
@@ -495,7 +502,7 @@ function ScreenshotDetailView({
 
                 <div className="flex items-center gap-1">
                     {saveMessage && (
-                        <span className={`text-xs px-2 py-1 rounded ${saveMessage === '已保存' ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                        <span className={`text-xs px-2 py-1 rounded ${saveMessage === t('assets.saved') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
                             {saveMessage}
                         </span>
                     )}
@@ -505,19 +512,19 @@ function ScreenshotDetailView({
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 rounded-lg transition-colors"
                     >
                         <Save size={14} />
-                        {isSaving ? '保存中...' : '保存'}
+                        {isSaving ? t('assets.saving') : t('assets.save')}
                     </button>
                     <button
                         onClick={() => onDownload(asset)}
                         className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
-                        title="下载"
+                        title={t('assets.download')}
                     >
                         <Download size={16} className="text-zinc-500" />
                     </button>
                     <button
                         onClick={() => onDelete(asset.id)}
                         className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                        title="删除"
+                        title={t('assets.deleteAsset')}
                     >
                         <Trash2 size={16} className="text-red-500" />
                     </button>
@@ -572,7 +579,7 @@ function ScreenshotDetailView({
                                 {/* Font Size */}
                                 <div className="flex items-center gap-2">
                                     <Type size={12} className="text-zinc-400" />
-                                    <span className="text-[11px] text-zinc-500">字号</span>
+                                    <span className="text-[11px] text-zinc-500">{t('assets.fontSize')}</span>
                                     <input
                                         type="range"
                                         min={16}
@@ -599,7 +606,7 @@ function ScreenshotDetailView({
                                                         : 'text-zinc-500 hover:text-zinc-700'
                                                 }`}
                                             >
-                                                {pos === 'top' ? '顶部' : '底部'}
+                                                {pos === 'top' ? t('assets.positionTop') : t('assets.positionBottom')}
                                             </button>
                                         ))}
                                     </div>
@@ -610,9 +617,9 @@ function ScreenshotDetailView({
                                     <Palette size={12} className="text-zinc-400" />
                                     <div className="flex p-0.5 bg-zinc-200 rounded-md">
                                         {[
-                                            { value: 'semi-transparent', label: '半透明' },
-                                            { value: 'solid', label: '纯黑' },
-                                            { value: 'none', label: '无' }
+                                            { value: 'semi-transparent', labelKey: 'assets.bgSemiTransparent' },
+                                            { value: 'solid', labelKey: 'assets.bgSolid' },
+                                            { value: 'none', labelKey: 'assets.bgNone' }
                                         ].map((opt) => (
                                             <button
                                                 key={opt.value}
@@ -623,7 +630,7 @@ function ScreenshotDetailView({
                                                         : 'text-zinc-500 hover:text-zinc-700'
                                                 }`}
                                             >
-                                                {opt.label}
+                                                {t(opt.labelKey)}
                                             </button>
                                         ))}
                                     </div>
@@ -638,7 +645,7 @@ function ScreenshotDetailView({
                     <div className="w-72 flex-shrink-0 border-l border-zinc-100 flex items-center justify-center">
                         <div className="text-center">
                             <div className="animate-spin w-5 h-5 border-2 border-zinc-300 border-t-zinc-600 rounded-full mx-auto mb-2" />
-                            <span className="text-[12px] text-zinc-400">加载字幕...</span>
+                            <span className="text-[12px] text-zinc-400">{t('assets.loadingSubtitles')}</span>
                         </div>
                     </div>
                 ) : hasSubtitles && (
@@ -646,7 +653,7 @@ function ScreenshotDetailView({
                         {/* Sidebar Header */}
                         <div className="p-3 border-b border-zinc-100">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-[12px] font-medium text-zinc-700">字幕选择</span>
+                                <span className="text-[12px] font-medium text-zinc-700">{t('assets.subtitleSelect')}</span>
                                 <div className="flex items-center gap-1">
                                     <button
                                         onClick={() => {
@@ -658,13 +665,13 @@ function ScreenshotDetailView({
                                         }}
                                         className="px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                     >
-                                        全选
+                                        {t('assets.selectAll')}
                                     </button>
                                     <button
                                         onClick={() => setSelectedSubtitles([])}
                                         className="px-2 py-0.5 text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 rounded transition-colors"
                                     >
-                                        清空
+                                        {t('assets.clear')}
                                     </button>
                                 </div>
                             </div>
@@ -675,7 +682,7 @@ function ScreenshotDetailView({
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="搜索字幕..."
+                                    placeholder={t('assets.searchSubtitle')}
                                     className="w-full h-7 pl-7 pr-2 text-[11px] bg-zinc-100 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 placeholder:text-zinc-400"
                                 />
                             </div>
@@ -699,7 +706,7 @@ function ScreenshotDetailView({
                                     }`}>
                                         {showAllSubtitles && <Check size={8} className="text-white" />}
                                     </div>
-                                    <span className="text-[10px] text-zinc-500">全部</span>
+                                    <span className="text-[10px] text-zinc-500">{t('assets.all')}</span>
                                 </label>
                             </div>
                         </div>
@@ -708,7 +715,7 @@ function ScreenshotDetailView({
                         <div ref={subtitleListRef} className="flex-1 overflow-auto p-2 space-y-1.5">
                             {filteredSubtitles.length === 0 ? (
                                 <div className="text-center py-8 text-[12px] text-zinc-400">
-                                    {searchQuery ? '未找到匹配字幕' : '无字幕'}
+                                    {searchQuery ? t('assets.noMatchingSubtitle') : t('assets.noSubtitle')}
                                 </div>
                             ) : (
                                 filteredSubtitles.map(({ sub, index }) => {
@@ -736,7 +743,7 @@ function ScreenshotDetailView({
                                                 <span className="text-[10px] font-mono text-zinc-400">{formatTime(sub.start)}</span>
                                                 {isCurrent && (
                                                     <span className="px-1 py-0.5 bg-blue-500 text-white text-[8px] font-semibold rounded uppercase">
-                                                        当前
+                                                        {t('assets.current')}
                                                     </span>
                                                 )}
                                             </div>
@@ -763,6 +770,7 @@ interface AssetPanelFullProps {
 }
 
 export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }: AssetPanelFullProps) {
+    const { t } = useTranslation();
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<FilterType>('all');
@@ -1046,7 +1054,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                             <button
                                 onClick={(e) => handleDownload(selectedAsset, e)}
                                 className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
-                                title="下载"
+                                title={t('assets.download')}
                             >
                                 <Download size={16} className="text-zinc-500" />
                             </button>
@@ -1054,7 +1062,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                         <button
                             onClick={(e) => handleDelete(selectedAsset.id, e)}
                             className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                            title="删除"
+                            title={t('assets.deleteAsset')}
                         >
                             <Trash2 size={16} className="text-red-500" />
                         </button>
@@ -1100,7 +1108,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                         <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-sm font-medium text-zinc-900">
                                             <Edit3 size={16} />
-                                            点击编辑
+                                            {t('assets.clickToEdit')}
                                         </div>
                                     </div>
                                 )}
@@ -1128,11 +1136,11 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                 onClick={handleImageClick}
                             >
                                 <div className="flex items-center justify-between mb-3">
-                                    <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">字幕</span>
+                                    <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t('assets.labelSubtitle')}</span>
                                     {onEditScreenshot && (
                                         <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                                             <Edit3 size={12} />
-                                            点击编辑
+                                            {t('assets.clickToEdit')}
                                         </span>
                                     )}
                                 </div>
@@ -1149,7 +1157,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                         {/* Content Text */}
                         {!isScreenshot && contentData?.content && (
                             <div className="mb-5 p-4 bg-white rounded-xl border border-zinc-100">
-                                <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">内容</div>
+                                <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">{t('assets.labelContent')}</div>
                                 <p className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">
                                     {contentData.content}
                                 </p>
@@ -1253,6 +1261,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     onDelete={handleDeleteFromDetail}
                     onDownload={handleDownloadFromDetail}
                     onUpdate={handleAssetUpdate}
+                    t={t}
                 />
             </div>
         );
@@ -1272,7 +1281,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
 
             {/* Header with close button */}
             <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
-                <span className="text-sm font-medium text-zinc-700">素材库</span>
+                <span className="text-sm font-medium text-zinc-700">{t('assets.title')}</span>
                 <button
                     onClick={onClose}
                     className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -1288,7 +1297,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     trigger={
                         <FilterTrigger
                             icon={<ArrowDownUp size={13} />}
-                            label={SORT_OPTIONS.find(o => o.value === sortBy)?.label || '排序'}
+                            label={t(SORT_OPTIONS.find(o => o.value === sortBy)?.labelKey || 'assets.sortBy')}
                             isActive={activePopover === 'sort'}
                             hasSelection={false}
                             onClick={() => setActivePopover(activePopover === 'sort' ? null : 'sort')}
@@ -1304,6 +1313,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                             setSortBy(value as SortType);
                             setActivePopover(null);
                         }}
+                        t={t}
                     />
                 </FilterPopover>
 
@@ -1315,7 +1325,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                 icon={markFilter === 'important' ? <Star size={13} className="text-amber-500" /> :
                                     markFilter === 'difficult' ? <AlertTriangle size={13} className="text-red-500" /> :
                                         <Star size={13} />}
-                                label={markFilter === 'all' ? '标记' : MARK_OPTIONS.find(o => o.value === markFilter)?.label || '标记'}
+                                label={markFilter === 'all' ? t('assets.filterMark') : t(MARK_OPTIONS.find(o => o.value === markFilter)?.labelKey || 'assets.filterMark')}
                                 isActive={activePopover === 'mark'}
                                 hasSelection={markFilter !== 'all'}
                                 onClick={() => setActivePopover(activePopover === 'mark' ? null : 'mark')}
@@ -1331,6 +1341,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                 setMarkFilter(value as MarkFilter);
                                 setActivePopover(null);
                             }}
+                            t={t}
                         />
                     </FilterPopover>
                 )}
@@ -1343,7 +1354,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     trigger={
                         <FilterTrigger
                             icon={<Video size={13} />}
-                            label={selectedSource ? (sourceOptions.find(s => s.url === selectedSource)?.title.slice(0, 10) + (sourceOptions.find(s => s.url === selectedSource)?.title.length! > 10 ? '...' : '') || '视频') : '视频'}
+                            label={selectedSource ? (sourceOptions.find(s => s.url === selectedSource)?.title.slice(0, 10) + (sourceOptions.find(s => s.url === selectedSource)?.title.length! > 10 ? '...' : '') || t('assets.video')) : t('assets.video')}
                             isActive={activePopover === 'source'}
                             hasSelection={!!selectedSource}
                             onClick={() => setActivePopover(activePopover === 'source' ? null : 'source')}
@@ -1353,7 +1364,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     onClose={() => setActivePopover(null)}
                 >
                     <div className="p-2 min-w-[240px] max-h-[300px] overflow-auto">
-                        <div className="text-xs font-medium text-zinc-500 px-2 mb-2">选择视频</div>
+                        <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('assets.selectVideo')}</div>
                         <div className="space-y-0.5">
                             {/* All option */}
                             <button
@@ -1364,7 +1375,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all duration-150 ${!selectedSource ? 'bg-blue-50 text-blue-700' : 'hover:bg-zinc-50 text-zinc-700'
                                     }`}
                             >
-                                <span className="text-sm font-medium">全部视频</span>
+                                <span className="text-sm font-medium">{t('assets.allVideos')}</span>
                                 <span className="text-xs text-zinc-400">{assets.length}</span>
                             </button>
                             {/* Video options */}
@@ -1399,7 +1410,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     trigger={
                         <FilterTrigger
                             icon={<Globe size={13} />}
-                            label={selectedPlatform ? (platformOptions.find(p => p.key === selectedPlatform)?.title || '平台') : '平台'}
+                            label={selectedPlatform ? (platformOptions.find(p => p.key === selectedPlatform)?.title || t('assets.platform')) : t('assets.platform')}
                             isActive={activePopover === 'platform'}
                             hasSelection={!!selectedPlatform}
                             onClick={() => setActivePopover(activePopover === 'platform' ? null : 'platform')}
@@ -1409,7 +1420,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     onClose={() => setActivePopover(null)}
                 >
                     <div className="p-2 min-w-[180px]">
-                        <div className="text-xs font-medium text-zinc-500 px-2 mb-2">选择平台</div>
+                        <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('assets.selectPlatform')}</div>
                         <div className="space-y-0.5">
                             {/* All option */}
                             <button
@@ -1420,7 +1431,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all duration-150 ${!selectedPlatform ? 'bg-blue-50 text-blue-700' : 'hover:bg-zinc-50 text-zinc-700'
                                     }`}
                             >
-                                <span className="text-sm font-medium">全部平台</span>
+                                <span className="text-sm font-medium">{t('assets.allPlatforms')}</span>
                                 <span className="text-xs text-zinc-400">{assets.length}</span>
                             </button>
                             {/* Platform options */}
@@ -1447,7 +1458,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
 
                 {/* Count */}
                 <span className="text-[12px] text-zinc-400 flex-none">
-                    {filteredAssets.length} 个素材
+                    {t('assets.assetsCount').replace('{count}', String(filteredAssets.length))}
                 </span>
             </div>
 
@@ -1460,11 +1471,11 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
                     <ImageIcon size={48} strokeWidth={1.5} />
                     <div className="text-center">
-                        <p className="text-[15px] font-medium text-gray-500">暂无素材</p>
+                        <p className="text-[15px] font-medium text-gray-500">{t('assets.empty')}</p>
                         <p className="text-[13px] mt-1">
-                            {filter === 'screenshot' && '使用 ⌘S 截取视频画面'}
-                            {filter === 'content' && '右键保存网页内容'}
-                            {filter === 'all' && '开始收集您的素材'}
+                            {filter === 'screenshot' && t('assets.useShortcut')}
+                            {filter === 'content' && t('assets.emptyContentHint')}
+                            {filter === 'all' && t('assets.emptyAllHint')}
                         </p>
                     </div>
                 </div>
@@ -1472,8 +1483,8 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
                     <Star size={48} strokeWidth={1.5} />
                     <div className="text-center">
-                        <p className="text-[15px] font-medium text-gray-500">没有符合条件的素材</p>
-                        <p className="text-[13px] mt-1">尝试调整筛选条件</p>
+                        <p className="text-[15px] font-medium text-gray-500">{t('assets.noMatchingAssets')}</p>
+                        <p className="text-[13px] mt-1">{t('assets.adjustFilters')}</p>
                     </div>
                 </div>
             ) : (
@@ -1506,6 +1517,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                     onSelectAll={selectAll}
                     onBatchDownload={handleBatchDownload}
                     onBatchDelete={handleBatchDelete}
+                    t={t}
                 />
             )}
         </div>
@@ -1524,6 +1536,7 @@ function FloatingActionBar({
     onSelectAll,
     onBatchDownload,
     onBatchDelete,
+    t,
 }: {
     selectedCount: number;
     totalCount: number;
@@ -1532,6 +1545,7 @@ function FloatingActionBar({
     onSelectAll: () => void;
     onBatchDownload: () => void;
     onBatchDelete: () => void;
+    t: (key: string) => string;
 }) {
     const isAllSelected = totalCount > 0 && selectedCount === totalCount;
 
@@ -1555,7 +1569,7 @@ function FloatingActionBar({
                         onClick={onSelectAll}
                         className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
                     >
-                        {isAllSelected ? '取消' : '全选'}
+                        {isAllSelected ? t('assets.cancel') : t('assets.selectAll')}
                     </button>
 
                     {/* 微型关闭按钮 - 右上角徽章风格 */}
@@ -1582,10 +1596,10 @@ function FloatingActionBar({
                                 ? 'hover:bg-white/10 text-white/90'
                                 : 'text-white/30 cursor-not-allowed'
                         }`}
-                        title={downloadableCount > 0 ? `下载 ${downloadableCount} 张截图` : '无可下载的截图'}
+                        title={t('assets.batchDownload')}
                     >
                         <Download size={14} />
-                        <span>下载</span>
+                        <span>{t('assets.batchDownload')}</span>
                         {downloadableCount > 0 && downloadableCount !== selectedCount && (
                             <span className="text-[10px] text-white/50">({downloadableCount})</span>
                         )}
@@ -1595,10 +1609,10 @@ function FloatingActionBar({
                     <button
                         onClick={onBatchDelete}
                         className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-500/20 text-white/90 hover:text-red-400 rounded-lg text-xs font-medium transition-colors"
-                        title="删除"
+                        title={t('assets.batchDelete')}
                     >
                         <Trash2 size={14} />
-                        <span>删除</span>
+                        <span>{t('assets.batchDelete')}</span>
                     </button>
                 </div>
             </div>

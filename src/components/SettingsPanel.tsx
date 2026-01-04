@@ -152,34 +152,31 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             <Globe size={14} className="text-gray-400" />
                             <h3 className="text-sm font-medium text-gray-500">{t('settings.language')}</h3>
                         </div>
-                        <div className="bg-gray-50 rounded-xl p-4">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-gray-700">{t('settings.languageDesc')}</div>
+                        <div className="bg-gray-50 rounded-xl overflow-hidden">
+                            <button
+                                onClick={() => handleLanguageChange('zh')}
+                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-100 transition-colors border-b border-gray-100"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-lg">🇨🇳</span>
+                                    <span className="text-sm text-gray-700">简体中文</span>
                                 </div>
-                            </div>
-                            <div className="flex gap-2 mt-3">
-                                <button
-                                    onClick={() => handleLanguageChange('zh')}
-                                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors ${
-                                        locale === 'zh'
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                                    }`}
-                                >
-                                    {t('settings.chinese')}
-                                </button>
-                                <button
-                                    onClick={() => handleLanguageChange('en')}
-                                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors ${
-                                        locale === 'en'
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                                    }`}
-                                >
-                                    {t('settings.english')}
-                                </button>
-                            </div>
+                                {locale === 'zh' && (
+                                    <Check size={16} className="text-blue-500" />
+                                )}
+                            </button>
+                            <button
+                                onClick={() => handleLanguageChange('en')}
+                                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-100 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-lg">🇺🇸</span>
+                                    <span className="text-sm text-gray-700">English</span>
+                                </div>
+                                {locale === 'en' && (
+                                    <Check size={16} className="text-blue-500" />
+                                )}
+                            </button>
                         </div>
                     </section>
 
@@ -295,13 +292,13 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                 </div>
                                 <button
                                     onClick={toggleAnalytics}
-                                    className={`relative w-11 h-6 rounded-full transition-colors ${
+                                    className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
                                         analyticsOn ? 'bg-blue-500' : 'bg-gray-300'
                                     }`}
                                 >
-                                    <div
-                                        className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                                            analyticsOn ? 'translate-x-6' : 'translate-x-1'
+                                    <span
+                                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                                            analyticsOn ? 'translate-x-4' : 'translate-x-0'
                                         }`}
                                     />
                                 </button>

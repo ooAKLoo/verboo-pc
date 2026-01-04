@@ -5,7 +5,7 @@
  */
 
 // PostHog 配置
-const POSTHOG_KEY = 'phx_g9SOjDun8D6ndBl1vzlrpUCvYicAodHhz2FpFZo1wBUMK1G';
+const POSTHOG_KEY = 'phc_O5X1ifMMwpN4HFSL8JYRUcHJzLwloDmosy5kaA4c4Y6';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 
 // Sentry 配置
@@ -13,16 +13,26 @@ const SENTRY_DSN = ''; // TODO: 填入你的 Sentry DSN
 
 // 用户偏好设置 key
 const ANALYTICS_ENABLED_KEY = 'verboo_analytics_enabled';
+const USER_ID_KEY = 'verboo_user_id';
+const FIRST_LAUNCH_KEY = 'verboo_first_launch_tracked';
+const INSTALL_DATE_KEY = 'verboo_install_date';
 
-// 获取唯一用户 ID
-function getOrCreateUserId(): string {
-    const key = 'verboo_user_id';
-    let userId = localStorage.getItem(key);
+// 获取唯一用户 ID（使用更稳定的生成策略）
+function getOrCreateUserId(): { userId: string; isNew: boolean } {
+    let userId = localStorage.getItem(USER_ID_KEY);
+    const isNew = !userId;
+
     if (!userId) {
-        userId = 'user_' + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem(key, userId);
+        // 使用时间戳 + 随机数组合，确保唯一性
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).substring(2, 10);
+        userId = `u_${timestamp}_${random}`;
+        localStorage.setItem(USER_ID_KEY, userId);
+        // 记录安装日期
+        localStorage.setItem(INSTALL_DATE_KEY, new Date().toISOString().split('T')[0]);
     }
-    return userId;
+
+    return { userId, isNew };
 }
 
 // 检查是否启用分析
@@ -46,10 +56,13 @@ class AnalyticsService {
     private userId: string;
     private sessionId: string;
     private initialized: boolean = false;
+    private isNewUser: boolean = false;
 
     constructor() {
-        this.userId = getOrCreateUserId();
-        this.sessionId = 'session_' + Date.now();
+        const { userId, isNew } = getOrCreateUserId();
+        this.userId = userId;
+        this.isNewUser = isNew;
+        this.sessionId = `s_${Date.now().toString(36)}`;
     }
 
     /**
@@ -67,18 +80,23 @@ class AnalyticsService {
         this.initialized = true;
         console.log('[Analytics] Initialized');
 
-        // 记录会话开始
-        this.capture('app_started', {
+        const commonProps = {
             platform: this.getPlatform(),
             version: this.getAppVersion(),
-        });
+            locale: navigator.language,
+        };
 
-        // 页面关闭时记录
-        window.addEventListener('beforeunload', () => {
-            this.capture('app_closed', {
-                session_duration: Date.now() - parseInt(this.sessionId.split('_')[1]),
+        // 首次启动事件（用于追踪下载量）
+        if (this.isNewUser && !localStorage.getItem(FIRST_LAUNCH_KEY)) {
+            this.capture('first_launch', {
+                ...commonProps,
+                install_date: localStorage.getItem(INSTALL_DATE_KEY),
             });
-        });
+            localStorage.setItem(FIRST_LAUNCH_KEY, 'true');
+        }
+
+        // 每次启动事件（用于 DAU 计算）
+        this.capture('app_started', commonProps);
     }
 
     /**

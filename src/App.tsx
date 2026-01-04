@@ -309,7 +309,7 @@ function AppContent() {
 
       {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => { setIsSettingsOpen(false); ipcRenderer.invoke('wcv-show-active'); }} />
 
       {/* AI字幕提示 */}
       {pendingAISubtitle && (
@@ -344,7 +344,7 @@ function AppContent() {
             </button>
           )}
           <button
-            onClick={() => setIsSettingsOpen(true)}
+            onClick={() => { ipcRenderer.invoke('wcv-hide-all'); setIsSettingsOpen(true); }}
             className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
           >
             <Settings size={16} />

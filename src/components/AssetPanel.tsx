@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Download, Edit3, ExternalLink, Play, Image as ImageIcon, FileText, ArrowLeft } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
+import { useTranslation } from '../contexts/I18nContext';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -12,6 +13,7 @@ interface AssetPanelProps {
 }
 
 export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelProps) {
+    const { t } = useTranslation();
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<FilterType>('all');
@@ -48,7 +50,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
 
     const handleDelete = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('确定要删除这个素材吗？')) return;
+        if (!confirm(t('assets.deleteConfirm'))) return;
 
         try {
             const response = await ipcRenderer.invoke('delete-asset', id);
@@ -114,24 +116,24 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                         className="flex items-center gap-1.5 text-[13px] text-[#52525b] hover:text-[#18181b] transition-colors"
                     >
                         <ArrowLeft size={14} />
-                        返回
+                        {t('assets.back')}
                     </button>
                     <div className="flex items-center gap-1">
                         {isScreenshot && onEditScreenshot && (
                             <button
                                 onClick={(e) => handleEdit(selectedAsset, e)}
                                 className="flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-medium text-[#3b82f6] bg-[#eff6ff] hover:bg-[#dbeafe] rounded-md transition-colors"
-                                title="编辑字幕"
+                                title={t('assets.editSubtitle')}
                             >
                                 <Edit3 size={12} />
-                                编辑
+                                {t('assets.edit')}
                             </button>
                         )}
                         {isScreenshot && (
                             <button
                                 onClick={(e) => handleDownload(selectedAsset, e)}
                                 className="p-1.5 hover:bg-[#f4f4f5] rounded-md transition-colors"
-                                title="下载截图"
+                                title={t('assets.downloadScreenshot')}
                             >
                                 <Download size={16} className="text-[#71717a]" />
                             </button>
@@ -139,7 +141,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                         <button
                             onClick={(e) => handleDelete(selectedAsset.id, e)}
                             className="p-1.5 hover:bg-[#fef2f2] rounded-md transition-colors"
-                            title="删除素材"
+                            title={t('assets.deleteAsset')}
                         >
                             <Trash2 size={16} className="text-[#dc2626]" />
                         </button>
@@ -219,14 +221,14 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
 
                         {/* Title */}
                         <div>
-                            <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">标题</div>
+                            <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{t('assets.labelTitle')}</div>
                             <div className="text-[13px] text-[#18181b]">{selectedAsset.title}</div>
                         </div>
 
                         {/* Content (for content type) */}
                         {!isScreenshot && (typeData as ContentTypeData).content && (
                             <div>
-                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">内容</div>
+                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{t('assets.labelContent')}</div>
                                 <div className="text-[13px] text-[#3f3f46] whitespace-pre-wrap">
                                     {(typeData as ContentTypeData).content}
                                 </div>
@@ -236,7 +238,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                         {/* Tags (for content type) */}
                         {!isScreenshot && (typeData as ContentTypeData).tags.length > 0 && (
                             <div>
-                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1.5">标签</div>
+                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1.5">{t('assets.labelTags')}</div>
                                 <div className="flex flex-wrap gap-1.5">
                                     {(typeData as ContentTypeData).tags.map((tag, index) => (
                                         <span
@@ -254,14 +256,14 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                         {isScreenshot && (
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">时间点</div>
+                                    <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{t('assets.labelTimestamp')}</div>
                                     <div className="text-[13px] text-[#18181b] font-mono flex items-center gap-1">
                                         <Play size={12} />
                                         {formatTime((typeData as ScreenshotTypeData).timestamp)}
                                     </div>
                                 </div>
                                 <div>
-                                    <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">创建时间</div>
+                                    <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{t('assets.labelCreatedAt')}</div>
                                     <div className="text-[13px] text-[#18181b]">{formatFullDate(selectedAsset.createdAt)}</div>
                                 </div>
                             </div>
@@ -270,7 +272,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                         {/* Subtitles (for screenshot) */}
                         {isScreenshot && (typeData as ScreenshotTypeData).selectedSubtitles && (typeData as ScreenshotTypeData).selectedSubtitles!.length > 0 && (
                             <div>
-                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1.5">字幕</div>
+                                <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1.5">{t('assets.labelSubtitle')}</div>
                                 <div className="space-y-1">
                                     {(typeData as ScreenshotTypeData).selectedSubtitles!.map((sub, index) => (
                                         <div key={index} className="p-2.5 bg-[#f4f4f5] rounded-lg text-[12px] text-[#3f3f46]">
@@ -283,7 +285,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
 
                         {/* URL */}
                         <div>
-                            <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">来源链接</div>
+                            <div className="text-[11px] font-medium text-[#a1a1aa] uppercase tracking-wider mb-1">{t('assets.labelSource')}</div>
                             <a
                                 href={selectedAsset.url}
                                 target="_blank"
@@ -303,7 +305,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
     if (loading) {
         return (
             <div className="h-full flex items-center justify-center">
-                <div className="text-[13px] text-[#a1a1aa]">加载中...</div>
+                <div className="text-[13px] text-[#a1a1aa]">{t('assets.loading')}</div>
             </div>
         );
     }
@@ -325,7 +327,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                             : 'text-[#52525b] hover:bg-[#f4f4f5]'
                     }`}
                 >
-                    全部
+                    {t('assets.all')}
                 </button>
                 <button
                     onClick={() => setFilter('screenshot')}
@@ -336,7 +338,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                     }`}
                 >
                     <ImageIcon size={12} />
-                    截图
+                    {t('assets.screenshots')}
                 </button>
                 <button
                     onClick={() => setFilter('content')}
@@ -347,7 +349,7 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                     }`}
                 >
                     <FileText size={12} />
-                    内容
+                    {t('assets.content')}
                 </button>
             </div>
 
@@ -356,11 +358,11 @@ export function AssetPanel({ refreshTrigger = 0, onEditScreenshot }: AssetPanelP
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                     <ImageIcon size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
                     <div className="text-center">
-                        <div className="text-[13px] font-medium text-[#71717a] mb-1">暂无素材</div>
+                        <div className="text-[13px] font-medium text-[#71717a] mb-1">{t('assets.empty')}</div>
                         <div className="text-[12px] text-[#a1a1aa]">
-                            {filter === 'screenshot' && '点击左侧"视频截图"开始捕获'}
-                            {filter === 'content' && '右键保存网页内容'}
-                            {filter === 'all' && '开始收集您的素材'}
+                            {filter === 'screenshot' && t('assets.emptyScreenshotHint')}
+                            {filter === 'content' && t('assets.emptyContentHint')}
+                            {filter === 'all' && t('assets.emptyAllHint')}
                         </div>
                     </div>
                 </div>

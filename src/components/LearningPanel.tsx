@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, X, GraduationCap } from 'lucide-react';
+import { useTranslation } from '../contexts/I18nContext';
 
 import type {
     WordInfo,
@@ -266,6 +267,7 @@ function SubtitleItemWithHighlight({
 }
 
 export function LearningPanel({ onClose }: LearningPanelProps) {
+    const { t } = useTranslation();
     const [subtitleRecords, setSubtitleRecords] = useState<SubtitleRecord[]>([]);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
     const [allWords, setAllWords] = useState<DifficultWord[]>([]);
@@ -499,7 +501,7 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
             <div className="h-full bg-white rounded-xl flex flex-col">
                 {/* Header */}
                 <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
-                    <span className="text-sm font-medium text-zinc-700">英语学习</span>
+                    <span className="text-sm font-medium text-zinc-700">{t('learning.title')}</span>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors">
                         <X size={18} className="text-zinc-400" />
                     </button>
@@ -531,19 +533,19 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
                     {loading ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-4">
                             <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full" />
-                            <span className="text-[13px] text-gray-400">加载词库数据...</span>
+                            <span className="text-[13px] text-gray-400">{t('learning.loadingVocab')}</span>
                         </div>
                     ) : loadingVideo ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-4">
                             <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full" />
-                            <span className="text-[13px] text-gray-400">正在分析视频词汇...</span>
+                            <span className="text-[13px] text-gray-400">{t('learning.analyzingVideo')}</span>
                         </div>
                     ) : filteredWords.length === 0 && allWords.length === 0 && selectedRecordId === null ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400">
                             <BookOpen size={48} strokeWidth={1.5} />
                             <div className="text-center">
-                                <p className="text-[15px] font-medium text-gray-500">词库为空</p>
-                                <p className="text-[13px] mt-1">请检查词库数据库是否正确加载</p>
+                                <p className="text-[15px] font-medium text-gray-500">{t('learning.emptyVocab')}</p>
+                                <p className="text-[13px] mt-1">{t('learning.checkVocabDb')}</p>
                             </div>
                         </div>
                     ) : (
@@ -554,8 +556,8 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
                                     <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
                                         <GraduationCap size={48} strokeWidth={1.5} />
                                         <div className="text-center">
-                                            <p className="text-[15px] font-medium text-gray-500">没有符合条件的词汇</p>
-                                            <p className="text-[13px] mt-1">尝试调整词库筛选条件</p>
+                                            <p className="text-[15px] font-medium text-gray-500">{t('learning.noMatchingWords')}</p>
+                                            <p className="text-[13px] mt-1">{t('learning.adjustFilters')}</p>
                                         </div>
                                     </div>
                                 ) : (
@@ -577,7 +579,7 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
                             {showSubtitles && selectedRecord && (
                                 <div className="w-80 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white">
                                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                                        <span className="text-[12px] font-medium text-gray-600">字幕 ({selectedRecord.subtitleData.length})</span>
+                                        <span className="text-[12px] font-medium text-gray-600">{t('learning.subtitles')} ({selectedRecord.subtitleData.length})</span>
                                         <button onClick={() => setShowSubtitles(false)} className="p-1 rounded hover:bg-gray-200 transition-colors">
                                             <X size={14} className="text-gray-400" />
                                         </button>

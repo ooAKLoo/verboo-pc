@@ -343,6 +343,10 @@ electron_1.app.whenReady().then(() => {
  */
 function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
+    // ============ App Version IPC Handler ============
+    electron_1.ipcMain.handle('get-app-version', () => {
+        return { success: true, version: electron_1.app.getVersion() };
+    });
     // ============ Locale IPC Handler ============
     electron_1.ipcMain.handle('set-locale', async (event, locale) => {
         try {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Asset, ScreenshotTypeData } from './AssetCard';
 import { FileText, SearchX, FileX, Sparkles, Star, AlertTriangle, Image, Clock, Play, Trash2 } from 'lucide-react';
+import { useTranslation } from '../contexts/I18nContext';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -29,6 +30,7 @@ interface InfoPanelProps {
 }
 
 export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [], currentUrl, materialRefreshTrigger }: InfoPanelProps) {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<TabType>('subtitle');
     const [videoAssets, setVideoAssets] = useState<Asset[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -202,7 +204,7 @@ ${subtitleText}
                         }`}
                     >
                         <FileText size={14} />
-                        字幕
+                        {t('infoPanel.subtitle')}
                     </button>
 
                     {/* 素材 Tab with Badge */}
@@ -215,7 +217,7 @@ ${subtitleText}
                         }`}
                     >
                         <Image size={14} />
-                        素材
+                        {t('infoPanel.assets')}
                         {videoAssets.length > 0 && (
                             <span className={`ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
                                 activeTab === 'asset'
@@ -240,7 +242,7 @@ ${subtitleText}
                                 <div className="flex-1 relative">
                                     <input
                                         type="text"
-                                        placeholder="搜索字幕..."
+                                        placeholder={t('infoPanel.searchSubtitle')}
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
@@ -258,10 +260,10 @@ ${subtitleText}
                                                     ? 'text-green-600 bg-green-50'
                                                     : 'text-[#52525b] bg-transparent hover:bg-[#f4f4f5]'
                                             }`}
-                                            title="复制字幕到英语学习Prompt"
+                                            title={t('infoPanel.aiLearning')}
                                         >
                                             <Sparkles size={12} />
-                                            {copySuccess ? '已复制' : 'AI学习'}
+                                            {copySuccess ? t('common.copied') : t('infoPanel.aiLearning')}
                                         </button>
                                         <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
                                     </>
@@ -274,7 +276,7 @@ ${subtitleText}
                                             : 'text-[#71717a] bg-transparent hover:bg-[#f4f4f5]'
                                     }`}
                                 >
-                                    {autoScroll ? '自动' : '手动'}
+                                    {autoScroll ? t('common.auto') : t('common.manual')}
                                 </button>
                             </div>
                         </div>
@@ -378,7 +380,7 @@ ${subtitleText}
                 ) : Array.isArray(data) && data.length > 0 && searchTerm ? (
                     <div className="h-full flex flex-col items-center justify-center gap-3 p-4">
                         <SearchX size={20} strokeWidth={1.5} className="text-[#d4d4d8]" />
-                        <span className="text-[13px] text-[#a1a1aa]">未找到匹配的字幕</span>
+                        <span className="text-[13px] text-[#a1a1aa]">{t('infoPanel.noMatchingSubtitle')}</span>
                     </div>
                 ) : data ? (
                     <div className="p-4">
@@ -390,8 +392,8 @@ ${subtitleText}
                     <div className="h-full flex flex-col items-center justify-center gap-3">
                         <FileX size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
                         <div className="text-center">
-                            <div className="text-[13px] font-medium text-[#71717a] mb-1">等待字幕数据</div>
-                            <div className="text-[12px] text-[#a1a1aa]">点击左侧插件提取字幕</div>
+                            <div className="text-[13px] font-medium text-[#71717a] mb-1">{t('infoPanel.waitingSubtitle')}</div>
+                            <div className="text-[12px] text-[#a1a1aa]">{t('infoPanel.clickToExtract')}</div>
                         </div>
                     </div>
                 )}
@@ -465,8 +467,8 @@ ${subtitleText}
                         <div className="h-full flex flex-col items-center justify-center gap-3">
                             <Image size={28} strokeWidth={1.5} className="text-[#e4e4e7]" />
                             <div className="text-center">
-                                <div className="text-[13px] font-medium text-[#71717a] mb-1">暂无截图</div>
-                                <div className="text-[12px] text-[#a1a1aa]">播放视频时截图会显示在这里</div>
+                                <div className="text-[13px] font-medium text-[#71717a] mb-1">{t('infoPanel.noScreenshots')}</div>
+                                <div className="text-[12px] text-[#a1a1aa]">{t('infoPanel.screenshotHint')}</div>
                             </div>
                         </div>
                     )}

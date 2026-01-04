@@ -84,7 +84,7 @@ export function SubtitleDialog({
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : '导入失败'
+        text: error instanceof Error ? error.message : t('subtitleDialog.importFailed')
       });
     } finally {
       setIsLoading(false);
@@ -100,14 +100,14 @@ export function SubtitleDialog({
 
     try {
       await onAutoFetch();
-      setMessage({ type: 'success', text: '字幕获取成功' });
+      setMessage({ type: 'success', text: t('subtitleDialog.fetchSuccess') });
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : '获取失败'
+        text: error instanceof Error ? error.message : t('subtitleDialog.fetchFailed')
       });
     } finally {
       setIsLoading(false);
@@ -123,14 +123,14 @@ export function SubtitleDialog({
 
     try {
       await onBilibiliFetch();
-      setMessage({ type: 'success', text: 'B站字幕获取成功' });
+      setMessage({ type: 'success', text: t('subtitleDialog.bilibiliFetchSuccess') });
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (error) {
       setMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : '获取失败'
+        text: error instanceof Error ? error.message : t('subtitleDialog.fetchFailed')
       });
     } finally {
       setIsLoading(false);
@@ -139,9 +139,9 @@ export function SubtitleDialog({
 
   // 第三方平台推荐
   const platforms = [
-    { name: 'B站字幕下载', url: 'https://kedou.life', desc: '哔哩哔哩视频字幕' },
-    { name: 'YouTube Subtitles', url: 'https://downloadyoutubesubtitles.com', desc: 'YouTube 字幕下载' },
-    { name: 'DownSub', url: 'https://downsub.com', desc: '多平台字幕下载' }
+    { name: 'Bilibili Subtitles', url: 'https://kedou.life', descKey: 'subtitleDialog.bilibiliSubtitle' },
+    { name: 'YouTube Subtitles', url: 'https://downloadyoutubesubtitles.com', descKey: 'subtitleDialog.youtubeSubtitle' },
+    { name: 'DownSub', url: 'https://downsub.com', descKey: 'subtitleDialog.multiPlatform' }
   ];
 
   if (!isOpen) return null;
@@ -157,7 +157,7 @@ export function SubtitleDialog({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#e4e4e7]">
-          <h2 className="text-[15px] font-semibold text-[#18181b]">获取字幕</h2>
+          <h2 className="text-[15px] font-semibold text-[#18181b]">{t('subtitleDialog.title')}</h2>
           <button
             onClick={onClose}
             className="p-1 text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] rounded-md transition-colors duration-150"
@@ -182,7 +182,7 @@ export function SubtitleDialog({
                 activeTab === 'auto' ? 'text-[#18181b]' : 'text-[#71717a]'
               }`}
             >
-              自动获取
+              {t('subtitleDialog.autoFetch')}
             </button>
             <button
               onClick={() => setActiveTab('manual')}
@@ -190,7 +190,7 @@ export function SubtitleDialog({
                 activeTab === 'manual' ? 'text-[#18181b]' : 'text-[#71717a]'
               }`}
             >
-              手动导入
+              {t('subtitleDialog.manualImport')}
             </button>
           </div>
         </div>
@@ -202,10 +202,10 @@ export function SubtitleDialog({
               {/* Current URL */}
               <div>
                 <label className="block text-[12px] font-medium text-[#71717a] mb-2">
-                  当前页面
+                  {t('subtitleDialog.currentPage')}
                 </label>
                 <div className="px-3 py-2 bg-[#f4f4f5] rounded-lg text-[13px] text-[#18181b] truncate">
-                  {currentUrl || '未知'}
+                  {currentUrl || t('common.unknown')}
                 </div>
               </div>
 
@@ -223,10 +223,10 @@ export function SubtitleDialog({
                   {isLoading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>获取中...</span>
+                      <span>{t('subtitleDialog.fetching')}</span>
                     </>
                   ) : (
-                    <span>获取 YouTube 字幕</span>
+                    <span>{t('subtitleDialog.fetchYouTube')}</span>
                   )}
                 </button>
               )}
@@ -244,10 +244,10 @@ export function SubtitleDialog({
                   {isLoading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>获取中...</span>
+                      <span>{t('subtitleDialog.fetching')}</span>
                     </>
                   ) : (
-                    <span>获取 B站 AI 字幕</span>
+                    <span>{t('subtitleDialog.fetchBilibili')}</span>
                   )}
                 </button>
               )}
@@ -257,7 +257,7 @@ export function SubtitleDialog({
                 <div className="flex items-start gap-2 px-3 py-2.5 bg-[#fef3c7] rounded-lg">
                   <AlertCircle size={16} className="text-[#f59e0b] mt-0.5 flex-shrink-0" />
                   <p className="text-[12px] text-[#92400e]">
-                    请先打开 YouTube 或 B站 视频页面
+                    {t('subtitleDialog.openVideoFirst')}
                   </p>
                 </div>
               )}
@@ -266,7 +266,7 @@ export function SubtitleDialog({
                 <div className="flex items-start gap-2 px-3 py-2.5 bg-[#e0f2fe] rounded-lg">
                   <AlertCircle size={16} className="text-[#0284c7] mt-0.5 flex-shrink-0" />
                   <p className="text-[12px] text-[#0369a1]">
-                    将自动打开 AI 小助手面板并提取字幕列表
+                    {t('subtitleDialog.bilibiliHint')}
                   </p>
                 </div>
               )}
@@ -298,18 +298,18 @@ export function SubtitleDialog({
                 {isLoading ? (
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 size={16} className="animate-spin text-[#71717a]" />
-                    <span className="text-[13px] text-[#71717a]">解析中...</span>
+                    <span className="text-[13px] text-[#71717a]">{t('subtitleDialog.parsing')}</span>
                   </div>
                 ) : (
                   <>
                     <p className="text-[13px] font-medium text-[#18181b] mb-1">
-                      拖拽字幕文件到这里
+                      {t('subtitleDialog.dragHere')}
                     </p>
                     <p className="text-[12px] text-[#a1a1aa] mb-3">
-                      或点击选择文件
+                      {t('subtitleDialog.orClickSelect')}
                     </p>
                     <p className="text-[11px] text-[#71717a]">
-                      支持 .srt .vtt .txt .json
+                      {t('subtitleDialog.supportedFormats')}
                     </p>
                   </>
                 )}
@@ -318,7 +318,7 @@ export function SubtitleDialog({
               {/* Recommended Platforms */}
               <div>
                 <label className="block text-[12px] font-medium text-[#71717a] mb-2">
-                  推荐下载平台
+                  {t('subtitleDialog.recommendedPlatforms')}
                 </label>
                 <div className="space-y-2">
                   {platforms.map((platform) => (
@@ -334,7 +334,7 @@ export function SubtitleDialog({
                           {platform.name}
                         </div>
                         <div className="text-[11px] text-[#a1a1aa]">
-                          {platform.desc}
+                          {t(platform.descKey)}
                         </div>
                       </div>
                       <ExternalLink size={14} className="text-[#a1a1aa] group-hover:text-[#71717a]" />

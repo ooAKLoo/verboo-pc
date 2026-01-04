@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Video, ChevronDown, Download, FileDown, Subtitles, Search, X } from 'lucide-react';
 import type { SubtitleItem } from '../utils/subtitleParser';
+import { useTranslation } from '../contexts/I18nContext';
 
 export interface SubtitleRecord {
     id: number;
@@ -18,33 +19,33 @@ interface SubtitleLibraryPanelProps {
 
 const { ipcRenderer } = window.require('electron');
 
-// Export format options for subtitles
+// Export format options for subtitles (keys for i18n)
 const SUBTITLE_EXPORT_FORMATS = [
     {
         id: 'srt',
         label: 'SRT',
-        desc: '通用字幕格式，兼容大多数播放器',
+        descKey: 'subtitleLibrary.srtDesc',
         icon: FileDown,
         extension: 'srt'
     },
     {
         id: 'vtt',
         label: 'WebVTT',
-        desc: 'HTML5 视频字幕标准格式',
+        descKey: 'subtitleLibrary.vttDesc',
         icon: FileDown,
         extension: 'vtt'
     },
     {
         id: 'txt',
-        label: '纯文本',
-        desc: '仅包含文字内容，不含时间轴',
+        label: 'TXT',
+        descKey: 'subtitleLibrary.txtDesc',
         icon: FileDown,
         extension: 'txt'
     },
     {
         id: 'json',
         label: 'JSON',
-        desc: '结构化数据，便于程序处理',
+        descKey: 'subtitleLibrary.jsonDesc',
         icon: FileDown,
         extension: 'json'
     },
@@ -135,24 +136,26 @@ function FilterPopover({
 function VideoSelector({
     records,
     selectedId,
-    onChange
+    onChange,
+    t
 }: {
     records: SubtitleRecord[];
     selectedId: number | null;
     onChange: (id: number) => void;
+    t: (key: string) => string;
 }) {
     const getPlatformName = (platform: string) => {
         switch (platform) {
-            case 'youtube': return 'YouTube';
-            case 'bilibili': return 'B站';
-            case 'bilibili-ai': return 'B站 AI';
-            default: return platform || '导入';
+            case 'youtube': return t('subtitleLibrary.platformYoutube');
+            case 'bilibili': return t('subtitleLibrary.platformBilibili');
+            case 'bilibili-ai': return t('subtitleLibrary.platformBilibiliAi');
+            default: return platform || t('subtitleLibrary.platformImport');
         }
     };
 
     return (
         <div className="p-2 min-w-[280px] max-h-[400px] overflow-y-auto">
-            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">选择视频</div>
+            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('subtitleLibrary.selectVideo')}</div>
             <div className="space-y-0.5">
                 {records.map(record => {
                     const isSelected = selectedId === record.id;
@@ -174,7 +177,7 @@ function VideoSelector({
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium truncate">
-                                    {record.videoTitle || '未命名视频'}
+                                    {record.videoTitle || t('subtitleLibrary.unnamed')}
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                     <span className="text-xs text-zinc-400">
@@ -182,7 +185,7 @@ function VideoSelector({
                                     </span>
                                     <span className="text-xs text-zinc-300">·</span>
                                     <span className="text-xs text-zinc-400">
-                                        {record.subtitleData.length} 条
+                                        {record.subtitleData.length} {t('common.items')}
                                     </span>
                                 </div>
                             </div>
@@ -206,14 +209,16 @@ function VideoSelector({
  */
 function SubtitleExportMenu({
     subtitles,
-    onExport
+    onExport,
+    t
 }: {
     subtitles: SubtitleItem[];
     onExport: (format: string) => void;
+    t: (key: string) => string;
 }) {
     return (
         <div className="p-2 min-w-[220px]">
-            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">导出格式</div>
+            <div className="text-xs font-medium text-zinc-500 px-2 mb-2">{t('subtitleLibrary.exportFormat')}</div>
             <div className="space-y-0.5">
                 {SUBTITLE_EXPORT_FORMATS.map(format => {
                     const IconComponent = format.icon;
@@ -227,7 +232,7 @@ function SubtitleExportMenu({
                             <IconComponent size={14} className="text-zinc-400 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium">{format.label}</div>
-                                <div className="text-xs text-zinc-400">{format.desc}</div>
+                                <div className="text-xs text-zinc-400">{t(format.descKey)}</div>
                             </div>
                         </button>
                     );
@@ -235,7 +240,7 @@ function SubtitleExportMenu({
             </div>
             <div className="mt-2 pt-2 border-t border-zinc-100 px-2">
                 <span className="text-[10px] text-zinc-400">
-                    将导出 {subtitles.length} 条字幕
+                    {t('subtitleLibrary.willExport').replace('{count}', String(subtitles.length))}
                 </span>
             </div>
         </div>
@@ -383,6 +388,7 @@ function SubtitleListItem({
 }
 
 export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
+    const { t } = useTranslation();
     const [subtitleRecords, setSubtitleRecords] = useState<SubtitleRecord[]>([]);
     const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -450,7 +456,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
         <div className="h-full bg-white rounded-xl flex flex-col">
             {/* Header */}
             <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
-                <span className="text-sm font-medium text-zinc-700">字幕库</span>
+                <span className="text-sm font-medium text-zinc-700">{t('subtitleLibrary.title')}</span>
                 <button
                     onClick={onClose}
                     className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -467,8 +473,8 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                         <FilterTrigger
                             icon={<Video size={13} />}
                             label={selectedRecord
-                                ? (selectedRecord.videoTitle?.slice(0, 15) + (selectedRecord.videoTitle && selectedRecord.videoTitle.length > 15 ? '...' : '')) || '选择视频'
-                                : '选择视频'}
+                                ? (selectedRecord.videoTitle?.slice(0, 15) + (selectedRecord.videoTitle && selectedRecord.videoTitle.length > 15 ? '...' : '')) || t('subtitleLibrary.selectVideo')
+                                : t('subtitleLibrary.selectVideo')}
                             isActive={activePopover === 'video'}
                             hasSelection={!!selectedRecordId}
                             onClick={() => setActivePopover(activePopover === 'video' ? null : 'video')}
@@ -481,6 +487,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                         records={subtitleRecords}
                         selectedId={selectedRecordId}
                         onChange={handleVideoSelect}
+                        t={t}
                     />
                 </FilterPopover>
 
@@ -492,7 +499,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                     trigger={
                         <FilterTrigger
                             icon={<Download size={13} />}
-                            label="下载"
+                            label={t('common.download')}
                             isActive={activePopover === 'export'}
                             hasSelection={false}
                             onClick={() => setActivePopover(activePopover === 'export' ? null : 'export')}
@@ -504,6 +511,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                     <SubtitleExportMenu
                         subtitles={filteredSubtitles}
                         onExport={handleExport}
+                        t={t}
                     />
                 </FilterPopover>
 
@@ -516,7 +524,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="搜索字幕..."
+                        placeholder={t('subtitleLibrary.searchSubtitle')}
                         className="flex-1 text-[12px] bg-transparent outline-none placeholder-zinc-400 min-w-0"
                     />
                     {searchQuery && (
@@ -528,7 +536,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
 
                 {/* Subtitle Count */}
                 <span className="text-[12px] text-zinc-400 flex-none">
-                    {filteredSubtitles.length} 条字幕
+                    {t('subtitleLibrary.subtitleCount').replace('{count}', String(filteredSubtitles.length))}
                 </span>
             </div>
 
@@ -537,22 +545,22 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                 {loading ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-4 h-full">
                         <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full" />
-                        <span className="text-[13px] text-gray-400">加载字幕数据...</span>
+                        <span className="text-[13px] text-gray-400">{t('subtitleLibrary.loadingSubtitles')}</span>
                     </div>
                 ) : subtitleRecords.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400 h-full">
                         <Subtitles size={48} strokeWidth={1.5} />
                         <div className="text-center">
-                            <p className="text-[15px] font-medium text-gray-500">暂无字幕</p>
-                            <p className="text-[13px] mt-1">请先获取或导入视频字幕</p>
+                            <p className="text-[15px] font-medium text-gray-500">{t('subtitleLibrary.noSubtitles')}</p>
+                            <p className="text-[13px] mt-1">{t('subtitleLibrary.getOrImport')}</p>
                         </div>
                     </div>
                 ) : filteredSubtitles.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-400 h-full">
                         <Search size={48} strokeWidth={1.5} />
                         <div className="text-center">
-                            <p className="text-[15px] font-medium text-gray-500">未找到匹配字幕</p>
-                            <p className="text-[13px] mt-1">尝试其他搜索词</p>
+                            <p className="text-[15px] font-medium text-gray-500">{t('subtitleLibrary.noMatch')}</p>
+                            <p className="text-[13px] mt-1">{t('common.tryOther')}</p>
                         </div>
                     </div>
                 ) : (
@@ -565,13 +573,13 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                                     #
                                 </div>
                                 <div className="table-cell h-8 align-middle pr-3 border-b border-zinc-200/60 text-[11px] text-zinc-500 font-medium uppercase tracking-wider w-[70px]">
-                                    时间
+                                    {t('subtitleLibrary.time')}
                                 </div>
                                 <div className="table-cell h-8 align-middle pr-3 border-b border-zinc-200/60 text-[11px] text-zinc-500 font-medium uppercase tracking-wider w-full">
-                                    内容
+                                    {t('subtitleLibrary.content')}
                                 </div>
                                 <div className="table-cell h-8 align-middle pr-6 border-b border-zinc-200/60 text-[11px] text-zinc-500 font-medium uppercase tracking-wider text-right whitespace-nowrap w-[60px]">
-                                    时长
+                                    {t('subtitleLibrary.duration')}
                                 </div>
                             </div>
                             {filteredSubtitles.map((subtitle, index) => (

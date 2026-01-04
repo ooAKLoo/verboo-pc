@@ -10,6 +10,16 @@ import log from 'electron-log';
 autoUpdater.logger = log;
 (autoUpdater.logger as typeof log).transports.file.level = 'info';
 
+// 开发环境也允许检查更新（仅用于测试）
+if (process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged) {
+    // 强制设置更新源（开发环境下 electron-updater 无法读取 electron-builder 配置）
+    autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'ooAKLoo',
+        repo: 'verboo-pc'
+    });
+}
+
 // 更新状态类型
 export type UpdateStatus =
     | 'checking'
@@ -112,10 +122,7 @@ export function initUpdater(win: BrowserWindow) {
         return { success: true };
     });
 
-    ipcMain.handle('get-app-version', () => {
-        const { app } = require('electron');
-        return { success: true, version: app.getVersion() };
-    });
+    // get-app-version 已移至 main.ts，确保开发/生产环境都可用
 
     // 应用启动后延迟检查更新（避免影响启动速度）
     setTimeout(() => {

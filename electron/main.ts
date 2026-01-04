@@ -395,6 +395,11 @@ app.whenReady().then(() => {
 function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
 
+    // ============ App Version IPC Handler ============
+    ipcMain.handle('get-app-version', () => {
+        return { success: true, version: app.getVersion() };
+    });
+
     // ============ Locale IPC Handler ============
     ipcMain.handle('set-locale', async (event, locale: Locale) => {
         try {

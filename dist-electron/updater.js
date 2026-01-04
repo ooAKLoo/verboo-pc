@@ -15,6 +15,15 @@ const electron_log_1 = __importDefault(require("electron-log"));
 // 配置日志
 electron_updater_1.autoUpdater.logger = electron_log_1.default;
 electron_updater_1.autoUpdater.logger.transports.file.level = 'info';
+// 开发环境也允许检查更新（仅用于测试）
+if (process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged) {
+    // 强制设置更新源（开发环境下 electron-updater 无法读取 electron-builder 配置）
+    electron_updater_1.autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'ooAKLoo',
+        repo: 'verboo-pc'
+    });
+}
 let mainWindow = null;
 /**
  * 发送更新状态到渲染进程
@@ -90,10 +99,7 @@ function initUpdater(win) {
         electron_updater_1.autoUpdater.quitAndInstall(false, true);
         return { success: true };
     });
-    electron_1.ipcMain.handle('get-app-version', () => {
-        const { app } = require('electron');
-        return { success: true, version: app.getVersion() };
-    });
+    // get-app-version 已移至 main.ts，确保开发/生产环境都可用
     // 应用启动后延迟检查更新（避免影响启动速度）
     setTimeout(() => {
         electron_log_1.default.info('[Updater] Auto checking for updates...');
