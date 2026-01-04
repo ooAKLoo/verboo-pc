@@ -15,6 +15,7 @@ import { Toast } from './components/Toast';
 import type { SubtitleItem } from './utils/subtitleParser';
 import type { Asset, ScreenshotTypeData } from './components/AssetCard';
 import { PanelLeft, PanelRight } from 'lucide-react';
+import { ViewProvider, useView, NavigationProvider, useNavigation } from './contexts';
 
 interface ToastState {
   id: string;
@@ -22,135 +23,99 @@ interface ToastState {
   type: 'success' | 'error' | 'screenshot';
 }
 
-// Pending AI subtitle state for user confirmation
 interface PendingAISubtitle {
   data: SubtitleItem[];
   count: number;
 }
 
-function App() {
-  // Welcome page state
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [isWelcomeExiting, setIsWelcomeExiting] = useState(false);
+// 内部 App 组件，使用 Context
+function AppContent() {
+  const { ipcRenderer } = window.require('electron');
 
-  const [leftCollapsed, setLeftCollapsed] = useState(true); // Start collapsed when welcome is shown
-  const [rightCollapsed, setRightCollapsed] = useState(true); // Start collapsed when welcome is shown
+  // 从 Context 获取视图状态
+  const {
+    viewMode,
+    isWelcomeExiting,
+    isInWelcomeMode,
+    leftCollapsed,
+    rightCollapsed,
+    toggleLeftPanel,
+    toggleRightPanel,
+    setRightCollapsed,
+    exitWelcomeAndNavigate,
+    closePanel,
+  } = useView();
+
+  // 从 Context 获取导航状态
+  const {
+    browserRef,
+    currentUrl,
+    pageTitle,
+    updateNavigationState,
+    updateCurrentUrl,
+    updatePageTitle,
+    updateVideoTime,
+    updateVideoDuration,
+    pendingSeekRef,
+    navigateToUrl,
+  } = useNavigation();
+
+  // 对话框状态
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
   const [showEnglishLearning, setShowEnglishLearning] = useState(false);
-  const [learningMode, setLearningMode] = useState(false);
-  const [assetMode, setAssetMode] = useState(false);
-  const [subtitleMode, setSubtitleMode] = useState(false);
-
-  // Screenshot editing mode (for post-processing)
   const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
   const [editingScreenshot, setEditingScreenshot] = useState<any>(null);
 
   // Toast state
   const [toast, setToast] = useState<ToastState | null>(null);
 
-  // Single page data
+  // 字幕和素材数据
   const [subtitleData, setSubtitleData] = useState<SubtitleItem[] | null>(null);
-  const [currentVideoTime, setCurrentVideoTime] = useState(0);
-  const [currentUrl, setCurrentUrl] = useState('');
-  const [pageTitle, setPageTitle] = useState('New Tab');
   const [materialRefreshTrigger, setMaterialRefreshTrigger] = useState(0);
-
-  // Subtitle marks (important/difficult)
   const [subtitleMarks, setSubtitleMarks] = useState<Array<{ timestamp: number; markType: 'important' | 'difficult' }>>([]);
 
-  // Track last loaded URL to avoid duplicate loads
+  // Track last loaded URL
   const lastLoadedUrlRef = useRef<string>('');
 
-  // Navigation state for Sidebar toolbar
-  const [navState, setNavState] = useState<NavigationState>({
-    inputUrl: 'https://www.google.com',
-    isLoading: false,
-    canGoBack: false,
-    canGoForward: false
-  });
-
-  // Pending AI subtitle for confirmation
+  // Pending AI subtitle
   const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
 
-  const browserRef = useRef<BrowserViewHandle>(null);
-  const { ipcRenderer } = window.require('electron');
-
-  // Hide WebContentsView when welcome page is shown
-  useEffect(() => {
-    if (showWelcome) {
-      // Small delay to ensure WebContentsView is created first
-      const timer = setTimeout(() => {
-        ipcRenderer.invoke('wcv-hide-all');
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [showWelcome, ipcRenderer]);
-
-  // Show toast notification
+  // Toast helpers
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success') => {
-    setToast({
-      id: Date.now().toString(),
-      message,
-      type
-    });
+    setToast({ id: Date.now().toString(), message, type });
   }, []);
 
-  const hideToast = useCallback(() => {
-    setToast(null);
-  }, []);
+  const hideToast = useCallback(() => setToast(null), []);
 
-  // Accept AI subtitle and replace current subtitles
+  // AI subtitle handlers
   const acceptAISubtitle = useCallback(async () => {
     if (!pendingAISubtitle) return;
-
-    const { data } = pendingAISubtitle;
-    console.log('[App] Accepting AI subtitle:', data.length, 'items');
-
-    // Update subtitle data
-    setSubtitleData(data);
-
-    // Save to database
+    setSubtitleData(pendingAISubtitle.data);
     const url = currentUrl || browserRef.current?.getCurrentUrl() || '';
     if (url) {
-      await saveSubtitlesToDatabase(url, pageTitle, 'bilibili-ai', data);
+      await saveSubtitlesToDatabase(url, pageTitle, 'bilibili-ai', pendingAISubtitle.data);
       lastLoadedUrlRef.current = url;
     }
-
-    // Clear pending and show success
     setPendingAISubtitle(null);
     if (rightCollapsed) setRightCollapsed(false);
     showToast('AI字幕已替换', 'success');
-  }, [pendingAISubtitle, currentUrl, pageTitle, rightCollapsed, showToast]);
+  }, [pendingAISubtitle, currentUrl, pageTitle, rightCollapsed, setRightCollapsed, showToast]);
 
-  // Dismiss AI subtitle prompt
-  const dismissAISubtitle = useCallback(() => {
-    setPendingAISubtitle(null);
-  }, []);
+  const dismissAISubtitle = useCallback(() => setPendingAISubtitle(null), []);
 
-  // Auto-load subtitles when URL changes
+  // Auto-load subtitles
   useEffect(() => {
-    if (!currentUrl) return;
-
-    // Skip if already loaded for this URL
-    if (lastLoadedUrlRef.current === currentUrl) return;
-
-    // Only auto-load for video pages
-    const isVideoPage = currentUrl.includes('youtube.com/watch') ||
-                        currentUrl.includes('bilibili.com/video');
+    if (!currentUrl || lastLoadedUrlRef.current === currentUrl) return;
+    const isVideoPage = currentUrl.includes('youtube.com/watch') || currentUrl.includes('bilibili.com/video');
     if (!isVideoPage) return;
-
-    // Check if we already have subtitles loaded in memory
     if (Array.isArray(subtitleData) && subtitleData.length > 0) {
       lastLoadedUrlRef.current = currentUrl;
       return;
     }
-
-    // Try to load from database
     const loadSubtitles = async () => {
       try {
         const response = await ipcRenderer.invoke('get-subtitles-by-url', currentUrl);
-        if (response.success && response.data && response.data.subtitleData) {
-          console.log('[App] Auto-loaded subtitles for:', currentUrl);
+        if (response.success && response.data?.subtitleData) {
           setSubtitleData(response.data.subtitleData);
           lastLoadedUrlRef.current = currentUrl;
         }
@@ -158,162 +123,45 @@ function App() {
         console.error('[App] Failed to auto-load subtitles:', error);
       }
     };
-
     loadSubtitles();
   }, [currentUrl, subtitleData, ipcRenderer]);
 
-  // Handle title change
-  const handleTitleChange = useCallback((title: string) => {
-    setPageTitle(title);
-  }, []);
-
-  // Handle URL changes from BrowserView
+  // URL change handler
   const handleUrlChange = useCallback((url: string) => {
-    // Clear marks when navigating to a new page
-    if (url !== currentUrl) {
-      setSubtitleMarks([]);
-    }
-    setCurrentUrl(url);
-  }, [currentUrl]);
+    if (url !== currentUrl) setSubtitleMarks([]);
+    updateCurrentUrl(url);
+  }, [currentUrl, updateCurrentUrl]);
 
-  // Handle navigation state changes from BrowserView
-  const handleNavigationStateChange = useCallback((state: NavigationState) => {
-    setNavState(state);
-  }, []);
-
-  // Navigation callbacks for Sidebar
-  const handleInputUrlChange = (url: string) => {
-    if (browserRef.current) {
-      browserRef.current.setInputUrl(url);
-    }
-  };
-
-  const handleNavigate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (browserRef.current) {
-      browserRef.current.navigate(navState.inputUrl);
-    }
-  };
-
-  const handleGoBack = () => {
-    browserRef.current?.goBack();
-  };
-
-  const handleGoForward = () => {
-    browserRef.current?.goForward();
-  };
-
-  const handleReload = () => {
-    browserRef.current?.reload();
-  };
-
-  // Animation duration constant
-  const WELCOME_EXIT_ANIMATION_MS = 500;
-
-  // Navigate to URL, handling welcome page exit if needed
-  const handleNavigateToUrl = useCallback(async (url: string, seekTo?: number) => {
-    // Store seek position if provided
-    if (seekTo && seekTo > 0) {
-      pendingSeekRef.current = seekTo;
-    }
-
-    if (showWelcome) {
-      // Exit welcome page with animation
-      setIsWelcomeExiting(true);
-      setTimeout(async () => {
-        setShowWelcome(false);
-        setIsWelcomeExiting(false);
-        setLeftCollapsed(false);
-        setRightCollapsed(false);
-        await ipcRenderer.invoke('wcv-show-active');
-        browserRef.current?.navigate(url);
-      }, WELCOME_EXIT_ANIMATION_MS);
-    } else {
-      // Close any open panels and show BrowserView
-      if (learningMode || assetMode || subtitleMode) {
-        setLearningMode(false);
-        setAssetMode(false);
-        setSubtitleMode(false);
-        await ipcRenderer.invoke('wcv-show-active');
-      }
-      // Direct navigation
-      browserRef.current?.navigate(url);
-    }
-  }, [showWelcome, learningMode, assetMode, subtitleMode, ipcRenderer]);
-
-  const handleRunPlugin = async (script: string) => {
-    if (browserRef.current) {
-      try {
-        const result = await browserRef.current.executeScript(script);
-        setSubtitleData(result);
-        if (rightCollapsed) setRightCollapsed(false);
-      } catch (error) {
-        console.error("Plugin execution failed:", error);
-      }
-    }
-  };
-
+  // Subtitle handlers
   const handleGetYouTubeSubtitles = async () => {
     if (!browserRef.current) return;
-
-    try {
-      const url = browserRef.current.getCurrentUrl();
-
-      if (!url.includes('youtube.com/watch')) {
-        throw new Error('请先打开 YouTube 视频页面');
-      }
-
-      console.log('Calling IPC to get subtitles for:', url);
-      const response = await ipcRenderer.invoke('get-youtube-subtitles', url);
-
-      if (response.success) {
-        console.log('Got subtitles:', response.data.length);
-        setSubtitleData(response.data);
-        if (rightCollapsed) setRightCollapsed(false);
-
-        // Save/update subtitles to database (upsert)
-        await saveSubtitlesToDatabase(url, pageTitle, 'youtube', response.data);
-        lastLoadedUrlRef.current = url;
-      } else {
-        throw new Error(response.error || '获取失败');
-      }
-    } catch (error) {
-      console.error('Failed to get subtitles:', error);
-      throw error;
+    const url = browserRef.current.getCurrentUrl();
+    if (!url.includes('youtube.com/watch')) throw new Error('请先打开 YouTube 视频页面');
+    const response = await ipcRenderer.invoke('get-youtube-subtitles', url);
+    if (response.success) {
+      setSubtitleData(response.data);
+      if (rightCollapsed) setRightCollapsed(false);
+      await saveSubtitlesToDatabase(url, pageTitle, 'youtube', response.data);
+      lastLoadedUrlRef.current = url;
+    } else {
+      throw new Error(response.error || '获取失败');
     }
   };
 
   const handleGetBilibiliSubtitles = async () => {
     if (!browserRef.current) return;
-
-    try {
-      const url = browserRef.current.getCurrentUrl();
-
-      if (!url.includes('bilibili.com/video')) {
-        throw new Error('请先打开 B站 视频页面');
-      }
-
-      console.log('[App] Extracting Bilibili subtitles...');
-      const subtitles = await browserRef.current.extractBilibiliSubtitles();
-
-      console.log('[App] Got Bilibili subtitles:', subtitles.length);
-      setSubtitleData(subtitles);
-      if (rightCollapsed) setRightCollapsed(false);
-
-      // Save/update subtitles to database
-      await saveSubtitlesToDatabase(url, pageTitle, 'bilibili', subtitles);
-      lastLoadedUrlRef.current = url;
-    } catch (error) {
-      console.error('[App] Failed to get Bilibili subtitles:', error);
-      throw error;
-    }
+    const url = browserRef.current.getCurrentUrl();
+    if (!url.includes('bilibili.com/video')) throw new Error('请先打开 B站 视频页面');
+    const subtitles = await browserRef.current.extractBilibiliSubtitles();
+    setSubtitleData(subtitles);
+    if (rightCollapsed) setRightCollapsed(false);
+    await saveSubtitlesToDatabase(url, pageTitle, 'bilibili', subtitles);
+    lastLoadedUrlRef.current = url;
   };
 
   const handleImportSubtitles = async (subtitles: SubtitleItem[]) => {
     setSubtitleData(subtitles);
     if (rightCollapsed) setRightCollapsed(false);
-
-    // Save/update imported subtitles (upsert)
     const url = browserRef.current?.getCurrentUrl() || '';
     if (url) {
       await saveSubtitlesToDatabase(url, pageTitle, 'import', subtitles);
@@ -321,44 +169,30 @@ function App() {
     }
   };
 
-  // Save subtitles to database (upsert by video_url)
-  const saveSubtitlesToDatabase = async (videoUrl: string, videoTitle: string, platform: string, subtitleDataToSave: SubtitleItem[]) => {
+  const saveSubtitlesToDatabase = async (videoUrl: string, videoTitle: string, platform: string, data: SubtitleItem[]) => {
     try {
-      const response = await ipcRenderer.invoke('save-subtitles', {
-        videoUrl,
-        videoTitle,
-        platform,
-        subtitleData: subtitleDataToSave
-      });
-      if (response.success) {
-        console.log('[App] Subtitles saved/updated:', response.data.id);
-      }
+      const response = await ipcRenderer.invoke('save-subtitles', { videoUrl, videoTitle, platform, subtitleData: data });
+      if (response.success) console.log('[App] Subtitles saved:', response.data.id);
     } catch (error) {
       console.error('[App] Failed to save subtitles:', error);
     }
   };
 
-  // Mark type for captures
+  // Screenshot handler
   type MarkType = 'none' | 'important' | 'difficult';
-
-  // Quick capture - silent save with toast feedback
   const handleCaptureScreenshot = async (markType: MarkType = 'none') => {
     if (!browserRef.current) {
       showToast('浏览器未就绪', 'error');
       return;
     }
-
     try {
       const result = await browserRef.current.captureVideoFrame();
       const currentSubtitles = Array.isArray(subtitleData) ? subtitleData : [];
-
-      // Find matching subtitle for current timestamp
       const matchingSubtitles = currentSubtitles.filter((sub: SubtitleItem) => {
         const end = sub.start + (sub.duration || 0);
         return result.timestamp >= sub.start && result.timestamp <= end;
       });
 
-      // Prepare save data with mark type
       const saveData: ScreenshotSaveData = {
         videoUrl: result.videoUrl,
         videoTitle: result.videoTitle,
@@ -369,351 +203,170 @@ function App() {
         author: result.author,
         markType: markType !== 'none' ? markType : undefined,
         subtitles: matchingSubtitles.length > 0
-          ? matchingSubtitles.map((sub: SubtitleItem) => ({
-              start: sub.start,
-              end: sub.start + (sub.duration || 0),
-              text: sub.text
-            }))
+          ? matchingSubtitles.map((sub: SubtitleItem) => ({ start: sub.start, end: sub.start + (sub.duration || 0), text: sub.text }))
           : undefined,
         subtitleStyle: matchingSubtitles.length > 0
           ? { position: 'bottom', background: 'semi-transparent', fontSize: 28, layout: 'vertical' }
           : undefined
       };
 
-      // Save screenshot silently
       const response = await ipcRenderer.invoke('save-screenshot', saveData);
-
       if (response.success) {
-        console.log('[App] Screenshot saved:', response.data.id, 'mark:', markType);
         setMaterialRefreshTrigger(prev => prev + 1);
-
-        // Add mark to subtitle marks if it's important or difficult
         if (markType === 'important' || markType === 'difficult') {
           setSubtitleMarks(prev => [...prev, { timestamp: result.timestamp, markType }]);
         }
-
-        // Show different toast based on mark type
-        const toastMessage = markType === 'important' ? '已标记为重点' :
-                           markType === 'difficult' ? '已标记为难点' :
-                           '已保存到截图库';
+        const toastMessage = markType === 'important' ? '已标记为重点' : markType === 'difficult' ? '已标记为难点' : '已保存到截图库';
         showToast(toastMessage, 'screenshot');
       } else {
         throw new Error(response.error || '保存失败');
       }
     } catch (error: any) {
-      console.error('[App] Screenshot failed:', error);
-      showToast(error.error || error.message || '截图失败', 'error');
+      showToast(error.message || '截图失败', 'error');
     }
   };
 
-  // Open screenshot editor for post-processing
+  // Screenshot editor
   const handleEditScreenshot = async (asset: Asset) => {
+    await ipcRenderer.invoke('wcv-hide-all');
+    const typeData = asset.typeData as ScreenshotTypeData;
+    let subtitles: SubtitleItem[] = [];
     try {
-      // Hide WebContentsView so modal is visible
-      await ipcRenderer.invoke('wcv-hide-all');
-
-      const typeData = asset.typeData as ScreenshotTypeData;
-      const videoUrl = asset.url;
-
-      // Always fetch latest subtitles by videoUrl
-      let subtitles: SubtitleItem[] = [];
-      const response = await ipcRenderer.invoke('get-subtitles-by-url', videoUrl);
-      if (response.success && response.data && response.data.subtitleData) {
-        subtitles = response.data.subtitleData;
-        console.log('[App] Loaded latest subtitles for editing:', subtitles.length);
-      }
-
-      setEditingScreenshot({
-        id: asset.id,
-        imageData: typeData.imageData,
-        timestamp: typeData.timestamp,
-        duration: 0,
-        videoUrl: asset.url,
-        videoTitle: asset.title,
-        width: 0,
-        height: 0,
-        subtitles
-      });
-      setIsScreenshotEditorOpen(true);
-    } catch (error) {
-      console.error('[App] Failed to load subtitles for editing:', error);
-      const typeData = asset.typeData as ScreenshotTypeData;
-      setEditingScreenshot({
-        id: asset.id,
-        imageData: typeData.imageData,
-        timestamp: typeData.timestamp,
-        duration: 0,
-        videoUrl: asset.url,
-        videoTitle: asset.title,
-        width: 0,
-        height: 0,
-        subtitles: []
-      });
-      setIsScreenshotEditorOpen(true);
-    }
+      const response = await ipcRenderer.invoke('get-subtitles-by-url', asset.url);
+      if (response.success && response.data?.subtitleData) subtitles = response.data.subtitleData;
+    } catch {}
+    setEditingScreenshot({
+      id: asset.id,
+      imageData: typeData.imageData,
+      timestamp: typeData.timestamp,
+      videoUrl: asset.url,
+      videoTitle: asset.title,
+      subtitles
+    });
+    setIsScreenshotEditorOpen(true);
   };
 
-  // Save edited screenshot
   const handleSaveEditedScreenshot = async (data: ScreenshotSaveData) => {
-    try {
-      const updateData = {
-        id: editingScreenshot.id,
-        typeData: {
-          selectedSubtitles: data.subtitles,
-          subtitleStyle: data.subtitleStyle,
-          finalImageData: data.finalImageData,
-        }
-      };
-
-      const response = await ipcRenderer.invoke('update-asset', updateData);
-
-      if (response.success) {
-        console.log('[App] Screenshot updated:', response.data.id);
-        setMaterialRefreshTrigger(prev => prev + 1);
-        setIsScreenshotEditorOpen(false);
-        setEditingScreenshot(null);
-        showToast('截图已更新', 'success');
-      } else {
-        throw new Error(response.error || '保存失败');
-      }
-    } catch (error) {
-      console.error('[App] Failed to update screenshot:', error);
-      throw error;
+    const response = await ipcRenderer.invoke('update-asset', {
+      id: editingScreenshot.id,
+      typeData: { selectedSubtitles: data.subtitles, subtitleStyle: data.subtitleStyle, finalImageData: data.finalImageData }
+    });
+    if (response.success) {
+      setMaterialRefreshTrigger(prev => prev + 1);
+      setIsScreenshotEditorOpen(false);
+      setEditingScreenshot(null);
+      showToast('截图已更新', 'success');
     }
   };
 
-  // Video duration state
-  const [videoDuration, setVideoDuration] = useState(0);
-
-  // Pending seek position (for resuming video)
-  const pendingSeekRef = useRef<number | null>(null);
-
-  // Handle data from BrowserView
+  // Browser data handler
   const handleBrowserData = useCallback((data: any) => {
-    if (data && data.type === 'video-time') {
-      setCurrentVideoTime(data.data.currentTime);
-      if (data.data.duration) {
-        setVideoDuration(data.data.duration);
-      }
-      // Handle pending seek (resume position)
+    if (data?.type === 'video-time') {
+      updateVideoTime(data.data.currentTime);
+      if (data.data.duration) updateVideoDuration(data.data.duration);
       if (pendingSeekRef.current !== null && data.data.currentTime > 0) {
         const seekTo = pendingSeekRef.current;
         pendingSeekRef.current = null;
-        // Seek video to saved position
-        browserRef.current?.executeScript(`
-          (function() {
-            const video = document.querySelector('video');
-            if (video) {
-              video.currentTime = ${seekTo};
-              console.log('[Verboo] Resumed to position:', ${seekTo});
-            }
-          })();
-        `);
+        browserRef.current?.executeScript(`(function(){ const v=document.querySelector('video'); if(v) v.currentTime=${seekTo}; })();`);
       }
-    }
-    else if (data && data.type === 'subtitle') {
-      setSubtitleData(prev => {
-        const currentList = Array.isArray(prev) ? prev : [];
-        return [...currentList, data];
-      });
-      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
-    }
-    else if (data && data.type === 'transcript') {
+    } else if (data?.type === 'subtitle') {
+      setSubtitleData(prev => [...(Array.isArray(prev) ? prev : []), data]);
+      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+    } else if (data?.type === 'transcript') {
       setSubtitleData(data.data);
-      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
-    }
-    else if (data && data.type === 'material-saved') {
+      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+    } else if (data?.type === 'material-saved') {
       setMaterialRefreshTrigger(prev => prev + 1);
-      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
-    }
-    else if (data && data.type === 'bilibili-ai-subtitle') {
-      console.log('[App] Received Bilibili AI subtitle:', data.count, 'items');
-      setPendingAISubtitle({
-        data: data.data,
-        count: data.count
-      });
-    }
-    else if (data) {
+      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+    } else if (data?.type === 'bilibili-ai-subtitle') {
+      setPendingAISubtitle({ data: data.data, count: data.count });
+    } else if (data) {
       setSubtitleData(data);
-      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
+      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
     }
-  }, [rightCollapsed, showWelcome]);
+  }, [rightCollapsed, isInWelcomeMode, setRightCollapsed, updateVideoTime, updateVideoDuration, pendingSeekRef, browserRef]);
 
   return (
     <div className="w-full h-full font-sans antialiased text-primary bg-background selection:bg-accent/20">
-      {/* Subtitle Dialog */}
+      {/* Dialogs */}
       <SubtitleDialog
         isOpen={isSubtitleDialogOpen}
-        onClose={() => {
-          setIsSubtitleDialogOpen(false);
-          ipcRenderer.invoke('wcv-show-active');
-        }}
+        onClose={() => { setIsSubtitleDialogOpen(false); ipcRenderer.invoke('wcv-show-active'); }}
         onSubtitlesImport={handleImportSubtitles}
         onAutoFetch={handleGetYouTubeSubtitles}
         onBilibiliFetch={handleGetBilibiliSubtitles}
         currentUrl={browserRef.current?.getCurrentUrl() || ''}
       />
 
-      {/* Screenshot Editor (for post-processing) */}
       <ScreenshotDialog
         isOpen={isScreenshotEditorOpen}
-        onClose={() => {
-          setIsScreenshotEditorOpen(false);
-          setEditingScreenshot(null);
-          ipcRenderer.invoke('wcv-show-active');
-        }}
+        onClose={() => { setIsScreenshotEditorOpen(false); setEditingScreenshot(null); ipcRenderer.invoke('wcv-show-active'); }}
         screenshotData={editingScreenshot}
         subtitles={editingScreenshot?.subtitles || []}
         onSave={handleSaveEditedScreenshot}
       />
 
-      {/* Toast Notification */}
-      {toast && (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={hideToast}
-        />
-      )}
+      {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      {/* AI Subtitle Confirmation Prompt */}
+      {/* AI Subtitle Prompt */}
       {pendingAISubtitle && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-sm text-gray-700">
-                检测到 AI 字幕 ({pendingAISubtitle.count} 条)
-              </span>
+              <span className="text-sm text-gray-700">检测到 AI 字幕 ({pendingAISubtitle.count} 条)</span>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={acceptAISubtitle}
-                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
-              >
-                使用此字幕
-              </button>
-              <button
-                onClick={dismissAISubtitle}
-                className="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                忽略
-              </button>
+              <button onClick={acceptAISubtitle} className="px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg">使用此字幕</button>
+              <button onClick={dismissAISubtitle} className="px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg">忽略</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Custom Titlebar with Toggle Buttons */}
-      <div
-        className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        {/* Left side - after traffic lights (macOS) */}
+      {/* Titlebar */}
+      <div className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <button
-            onClick={() => setLeftCollapsed(!leftCollapsed)}
-            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
-          >
+          <button onClick={toggleLeftPanel} className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all">
             <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
           </button>
         </div>
-
-        {/* Right side - Only show when not in welcome mode */}
-        {!showWelcome && (
+        {!isInWelcomeMode && (
           <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button
-              onClick={() => {
-                if (learningMode) {
-                  setLearningMode(false);
-                  ipcRenderer.invoke('wcv-show-active');
-                } else if (assetMode) {
-                  setAssetMode(false);
-                  ipcRenderer.invoke('wcv-show-active');
-                } else if (subtitleMode) {
-                  setSubtitleMode(false);
-                  ipcRenderer.invoke('wcv-show-active');
-                } else {
-                  setRightCollapsed(!rightCollapsed);
-                }
-              }}
-              className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
+              onClick={() => viewMode !== 'browser' ? closePanel() : toggleRightPanel()}
+              className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
             >
-              <PanelRight size={16} className={(rightCollapsed && !learningMode && !assetMode && !subtitleMode) ? "opacity-50" : "opacity-100"} />
+              <PanelRight size={16} className={(rightCollapsed && viewMode === 'browser') ? "opacity-50" : "opacity-100"} />
             </button>
           </div>
         )}
       </div>
 
+      {/* Layout */}
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
-        learningMode={learningMode}
-        assetMode={assetMode}
-        subtitleMode={subtitleMode}
+        learningMode={viewMode === 'learning'}
+        assetMode={viewMode === 'asset'}
+        subtitleMode={viewMode === 'subtitle'}
         left={
           <Sidebar
-            onRunPlugin={handleRunPlugin}
-            onOpenSubtitleDialog={() => {
-              ipcRenderer.invoke('wcv-hide-all');
-              setIsSubtitleDialogOpen(true);
-            }}
+            onOpenSubtitleDialog={() => { ipcRenderer.invoke('wcv-hide-all'); setIsSubtitleDialogOpen(true); }}
             onCaptureScreenshot={handleCaptureScreenshot}
-            onOpenEnglishLearning={() => {
-              setLearningMode(true);
-              setAssetMode(false);
-              setSubtitleMode(false);
-              ipcRenderer.invoke('wcv-hide-all');
-            }}
-            onOpenAssetPanel={() => {
-              setAssetMode(true);
-              setLearningMode(false);
-              setSubtitleMode(false);
-              ipcRenderer.invoke('wcv-hide-all');
-            }}
-            onOpenSubtitleLibrary={() => {
-              setSubtitleMode(true);
-              setLearningMode(false);
-              setAssetMode(false);
-              ipcRenderer.invoke('wcv-hide-all');
-            }}
-            inputUrl={navState.inputUrl}
-            onInputUrlChange={handleInputUrlChange}
-            onNavigate={handleNavigate}
-            onNavigateToUrl={handleNavigateToUrl}
-            isLoading={navState.isLoading}
-            canGoBack={navState.canGoBack}
-            canGoForward={navState.canGoForward}
-            onGoBack={handleGoBack}
-            onGoForward={handleGoForward}
-            onReload={handleReload}
-            currentUrl={currentUrl}
-            pageTitle={pageTitle}
-            currentVideoTime={currentVideoTime}
-            videoDuration={videoDuration}
-            showWelcome={showWelcome}
-            isLearningActive={learningMode}
-            isAssetActive={assetMode}
-            isSubtitleActive={subtitleMode}
           />
         }
         main={
           <div className="flex flex-col h-full">
             <div className="flex-1 relative">
-              {showWelcome && (
-                <WelcomePage
-                  onNavigate={handleNavigateToUrl}
-                  isExiting={isWelcomeExiting}
-                />
-              )}
+              {viewMode === 'welcome' && <WelcomePage onNavigate={navigateToUrl} isExiting={isWelcomeExiting} />}
               <BrowserView
                 ref={browserRef}
                 initialUrl="about:blank"
-                initialVisible={!showWelcome}
-                onTitleChange={handleTitleChange}
+                initialVisible={viewMode === 'browser'}
+                onTitleChange={updatePageTitle}
                 onUrlChange={handleUrlChange}
-                onNavigationStateChange={handleNavigationStateChange}
+                onNavigationStateChange={updateNavigationState}
                 onData={handleBrowserData}
               />
             </div>
@@ -722,7 +375,7 @@ function App() {
         right={
           <InfoPanel
             data={subtitleData}
-            currentVideoTime={currentVideoTime}
+            currentVideoTime={0}
             materialRefreshTrigger={materialRefreshTrigger}
             onEditScreenshot={handleEditScreenshot}
             showEnglishLearning={showEnglishLearning}
@@ -731,34 +384,46 @@ function App() {
             currentUrl={currentUrl}
           />
         }
-        learning={
-          <LearningPanel
-            onClose={() => {
-              setLearningMode(false);
-              ipcRenderer.invoke('wcv-show-active');
-            }}
-          />
-        }
-        asset={
-          <AssetPanelFull
-            onClose={() => {
-              setAssetMode(false);
-              ipcRenderer.invoke('wcv-show-active');
-            }}
-            refreshTrigger={materialRefreshTrigger}
-            onEditScreenshot={handleEditScreenshot}
-          />
-        }
-        subtitle={
-          <SubtitleLibraryPanel
-            onClose={() => {
-              setSubtitleMode(false);
-              ipcRenderer.invoke('wcv-show-active');
-            }}
-          />
-        }
+        learning={<LearningPanel onClose={closePanel} />}
+        asset={<AssetPanelFull onClose={closePanel} refreshTrigger={materialRefreshTrigger} onEditScreenshot={handleEditScreenshot} />}
+        subtitle={<SubtitleLibraryPanel onClose={closePanel} />}
       />
     </div>
+  );
+}
+
+// 根组件：提供 Context Providers
+function App() {
+  const { ipcRenderer } = window.require('electron');
+
+  return (
+    <ViewProvider
+      onWcvShow={() => ipcRenderer.invoke('wcv-show-active')}
+      onWcvHide={() => ipcRenderer.invoke('wcv-hide-all')}
+    >
+      <NavigationProviderWrapper>
+        <AppContent />
+      </NavigationProviderWrapper>
+    </ViewProvider>
+  );
+}
+
+// NavigationProvider 包装器，需要访问 useView
+function NavigationProviderWrapper({ children }: { children: React.ReactNode }) {
+  const { isInWelcomeMode, viewMode, exitWelcomeAndNavigate, switchView } = useView();
+
+  const handleNavigateToUrl = useCallback(async (url: string, seekTo?: number) => {
+    if (isInWelcomeMode && viewMode === 'welcome') {
+      await exitWelcomeAndNavigate();
+    } else if (viewMode !== 'browser') {
+      switchView('browser');
+    }
+  }, [isInWelcomeMode, viewMode, exitWelcomeAndNavigate, switchView]);
+
+  return (
+    <NavigationProvider onNavigateToUrl={handleNavigateToUrl}>
+      {children}
+    </NavigationProvider>
   );
 }
 

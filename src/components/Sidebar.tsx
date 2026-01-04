@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles, BookOpen, Download } from 'lucide-react';
+import { useNavigation } from '../contexts/NavigationContext';
+import { useView } from '../contexts/ViewContext';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -9,8 +11,8 @@ interface RecentSite {
     url: string;
     title: string;
     favicon?: string;
-    lastPosition?: number; // Last watched position in seconds
-    duration?: number; // Total video duration
+    lastPosition?: number;
+    duration?: number;
 }
 
 const RECENT_SITES_KEY = 'verboo_recent_sites';
@@ -26,51 +28,38 @@ function getDomain(url: string): string {
     }
 }
 
-// Get favicon URL from site URL - directly from the website
+// Get favicon URL from site URL
 function getFaviconUrl(url: string): string {
     try {
         const urlObj = new URL(url);
-        // 直接从网站获取 favicon
         return `${urlObj.origin}/favicon.ico`;
     } catch {
         return '';
     }
 }
 
-// Get normalized video URL for comparison (remove time params, keep video ID)
+// Get normalized video URL for comparison
 function getNormalizedVideoUrl(url: string): string {
     try {
         const urlObj = new URL(url);
-
-        // YouTube: keep only v parameter
         if (urlObj.hostname.includes('youtube.com') && urlObj.pathname === '/watch') {
             const videoId = urlObj.searchParams.get('v');
-            if (videoId) {
-                return `https://www.youtube.com/watch?v=${videoId}`;
-            }
+            if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
         }
-
-        // Bilibili: keep only path (video ID), remove query params
         if (urlObj.hostname.includes('bilibili.com') && urlObj.pathname.includes('/video/')) {
             const match = urlObj.pathname.match(/\/video\/(BV[a-zA-Z0-9]+|av\d+)/);
-            if (match) {
-                return `https://www.bilibili.com/video/${match[1]}`;
-            }
+            if (match) return `https://www.bilibili.com/video/${match[1]}`;
         }
-
-        // For other URLs, return as-is
         return url;
     } catch {
         return url;
     }
 }
 
-// Check if two URLs refer to the same video
 function isSameVideo(url1: string, url2: string): boolean {
     return getNormalizedVideoUrl(url1) === getNormalizedVideoUrl(url2);
 }
 
-// Load recent sites from localStorage
 function loadRecentSites(): RecentSite[] {
     try {
         const stored = localStorage.getItem(RECENT_SITES_KEY);
@@ -80,20 +69,13 @@ function loadRecentSites(): RecentSite[] {
     }
 }
 
-// Save recent sites to localStorage (LRU)
 function saveRecentSite(url: string, title: string, position?: number, duration?: number): RecentSite[] {
-    // Skip empty, about: URLs, and Google (default homepage)
     if (!url || url.startsWith('about:') || url.includes('google.com')) {
         return loadRecentSites();
     }
-
     const sites = loadRecentSites();
-
-    // Find existing entry to preserve/update position (use video ID comparison)
     const existing = sites.find(s => isSameVideo(s.url, url));
     const filtered = sites.filter(s => !isSameVideo(s.url, url));
-
-    // Add to front (most recent) with position data
     const newSite: RecentSite = {
         url,
         title: title || getDomain(url),
@@ -101,18 +83,14 @@ function saveRecentSite(url: string, title: string, position?: number, duration?
         duration: duration ?? existing?.duration
     };
     const updated = [newSite, ...filtered].slice(0, MAX_RECENT_SITES);
-
     localStorage.setItem(RECENT_SITES_KEY, JSON.stringify(updated));
     return updated;
 }
 
-// Update position for existing site without changing order
 function updateSitePosition(url: string, position: number, duration?: number): void {
     if (!url || url.includes('google.com')) return;
-
     const sites = loadRecentSites();
     const index = sites.findIndex(s => isSameVideo(s.url, url));
-
     if (index >= 0) {
         sites[index].lastPosition = position;
         if (duration) sites[index].duration = duration;
@@ -120,7 +98,6 @@ function updateSitePosition(url: string, position: number, duration?: number): v
     }
 }
 
-// Format seconds to MM:SS or HH:MM:SS
 function formatPosition(seconds: number): string {
     if (!seconds || seconds < 0) return '';
     const hrs = Math.floor(seconds / 3600);
@@ -132,63 +109,41 @@ function formatPosition(seconds: number): string {
     return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+// 简化后的 Props：只保留功能回调
 interface SidebarProps {
-    onRunPlugin: (script: string) => void;
     onOpenSubtitleDialog: () => void;
     onCaptureScreenshot: (markType?: MarkType) => void;
-    onOpenEnglishLearning: () => void;
-    onOpenAssetPanel: () => void;
-    onOpenSubtitleLibrary: () => void;
-    // Navigation toolbar props
-    inputUrl: string;
-    onInputUrlChange: (url: string) => void;
-    onNavigate: (e: React.FormEvent) => void;
-    onNavigateToUrl: (url: string, seekTo?: number) => void;
-    isLoading: boolean;
-    canGoBack: boolean;
-    canGoForward: boolean;
-    onGoBack: () => void;
-    onGoForward: () => void;
-    onReload: () => void;
-    // For tracking recent sites
-    currentUrl?: string;
-    pageTitle?: string;
-    currentVideoTime?: number;
-    videoDuration?: number;
-    // WelcomePage state
-    showWelcome?: boolean;
-    // Active panel states
-    isLearningActive?: boolean;
-    isAssetActive?: boolean;
-    isSubtitleActive?: boolean;
 }
 
 export function Sidebar({
-    onRunPlugin,
     onOpenSubtitleDialog,
     onCaptureScreenshot,
-    onOpenEnglishLearning,
-    onOpenAssetPanel,
-    onOpenSubtitleLibrary,
-    inputUrl,
-    onInputUrlChange,
-    onNavigate,
-    onNavigateToUrl,
-    isLoading,
-    canGoBack,
-    canGoForward,
-    onGoBack,
-    onGoForward,
-    onReload,
-    currentUrl,
-    pageTitle,
-    currentVideoTime,
-    videoDuration,
-    showWelcome = false,
-    isLearningActive = false,
-    isAssetActive = false,
-    isSubtitleActive = false
 }: SidebarProps) {
+    // 从 Context 获取导航状态
+    const {
+        inputUrl,
+        isLoading,
+        canGoBack,
+        canGoForward,
+        currentUrl,
+        pageTitle,
+        currentVideoTime,
+        videoDuration,
+        setInputUrl,
+        navigate,
+        navigateToUrl,
+        goBack,
+        goForward,
+        reload,
+    } = useNavigation();
+
+    // 从 Context 获取视图状态
+    const {
+        viewMode,
+        isWelcomeVisible,
+        switchView,
+    } = useView();
+
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
 
     // Load recent sites on mount
@@ -196,58 +151,52 @@ export function Sidebar({
         setRecentSites(loadRecentSites());
     }, []);
 
-    // Save current site when URL changes (with debounce to avoid saving during redirects)
+    // Save current site when URL changes
     useEffect(() => {
         if (!currentUrl || currentUrl.includes('google.com')) return;
-
         const timer = setTimeout(() => {
             const updated = saveRecentSite(currentUrl, pageTitle || '', currentVideoTime, videoDuration);
             setRecentSites(updated);
         }, 1000);
-
         return () => clearTimeout(timer);
     }, [currentUrl, pageTitle]);
 
-    // Update video position periodically (every 5 seconds for video pages)
+    // Update video position periodically
     useEffect(() => {
         if (!currentUrl || !currentVideoTime || currentVideoTime < 1) return;
-
-        // Only save position for video pages
-        const isVideoPage = currentUrl.includes('youtube.com/watch') ||
-                            currentUrl.includes('bilibili.com/video');
+        const isVideoPage = currentUrl.includes('youtube.com/watch') || currentUrl.includes('bilibili.com/video');
         if (!isVideoPage) return;
-
         updateSitePosition(currentUrl, currentVideoTime, videoDuration);
-        // Update local state to reflect the change
         setRecentSites(loadRecentSites());
-    }, [Math.floor((currentVideoTime || 0) / 5)]); // Update every 5 seconds
+    }, [Math.floor((currentVideoTime || 0) / 5)]);
 
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Check for Cmd/Ctrl key combinations
             const isMod = e.metaKey || e.ctrlKey;
             if (!isMod) return;
-
             switch (e.key.toLowerCase()) {
-                case 's': // Cmd+S: Screenshot
+                case 's':
                     e.preventDefault();
                     onCaptureScreenshot('none');
                     break;
-                case 'i': // Cmd+I: Important mark
+                case 'i':
                     e.preventDefault();
                     onCaptureScreenshot('important');
                     break;
-                case 'd': // Cmd+D: Difficult mark
+                case 'd':
                     e.preventDefault();
                     onCaptureScreenshot('difficult');
                     break;
             }
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onCaptureScreenshot]);
+
+    const isLearningActive = viewMode === 'learning';
+    const isAssetActive = viewMode === 'asset';
+    const isSubtitleActive = viewMode === 'subtitle';
 
     return (
         <div className="h-full flex flex-col pt-4 pb-2 font-sans bg-white">
@@ -261,11 +210,9 @@ export function Sidebar({
                 {/* Always visible - Learning & Library section */}
                 <div className="flex flex-col gap-1">
                     <div
-                        onClick={onOpenEnglishLearning}
+                        onClick={() => switchView('learning')}
                         className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isLearningActive
-                                ? 'bg-[#f4f4f5]'
-                                : 'hover:bg-[#f4f4f5]'
+                            isLearningActive ? 'bg-[#f4f4f5]' : 'hover:bg-[#f4f4f5]'
                         }`}
                     >
                         <BookOpen size={14} className={isLearningActive ? 'text-[#18181b]' : 'text-gray-400'} />
@@ -273,11 +220,9 @@ export function Sidebar({
                     </div>
 
                     <div
-                        onClick={onOpenAssetPanel}
+                        onClick={() => switchView('asset')}
                         className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isAssetActive
-                                ? 'bg-[#f4f4f5]'
-                                : 'hover:bg-[#f4f4f5]'
+                            isAssetActive ? 'bg-[#f4f4f5]' : 'hover:bg-[#f4f4f5]'
                         }`}
                     >
                         <Package size={14} className={isAssetActive ? 'text-[#18181b]' : 'text-gray-400'} />
@@ -285,11 +230,9 @@ export function Sidebar({
                     </div>
 
                     <div
-                        onClick={onOpenSubtitleLibrary}
+                        onClick={() => switchView('subtitle')}
                         className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isSubtitleActive
-                                ? 'bg-[#f4f4f5]'
-                                : 'hover:bg-[#f4f4f5]'
+                            isSubtitleActive ? 'bg-[#f4f4f5]' : 'hover:bg-[#f4f4f5]'
                         }`}
                     >
                         <Subtitles size={14} className={isSubtitleActive ? 'text-[#18181b]' : 'text-gray-400'} />
@@ -297,8 +240,8 @@ export function Sidebar({
                     </div>
                 </div>
 
-                {/* Video-related controls - Only show when browser has loaded a valid page */}
-                {!showWelcome && currentUrl && !currentUrl.startsWith('about:') && (
+                {/* Video-related controls */}
+                {!isWelcomeVisible && currentUrl && !currentUrl.startsWith('about:') && (
                     <>
                         <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
 
@@ -353,7 +296,7 @@ export function Sidebar({
                         {recentSites.map((site, index) => (
                             <button
                                 key={index}
-                                onClick={() => onNavigateToUrl(site.url, site.lastPosition)}
+                                onClick={() => navigateToUrl(site.url, site.lastPosition)}
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left"
                                 title={`${site.url}${site.lastPosition ? ` - 上次观看到 ${formatPosition(site.lastPosition)}` : ''}`}
                             >
@@ -361,9 +304,7 @@ export function Sidebar({
                                     src={getFaviconUrl(site.url) || '/icon.svg'}
                                     alt=""
                                     className="w-4 h-4 flex-shrink-0"
-                                    onError={(e) => {
-                                        e.currentTarget.src = '/icon.svg';
-                                    }}
+                                    onError={(e) => { e.currentTarget.src = '/icon.svg'; }}
                                 />
                                 <div className="flex-1 min-w-0">
                                     <div className="text-xs text-gray-600 truncate">
@@ -382,38 +323,34 @@ export function Sidebar({
                 </div>
             )}
 
-            {/* Navigation Toolbar - Fixed at bottom */}
-            <div className={`px-2 overflow-hidden transition-all duration-500 ease-out ${showWelcome ? 'opacity-0 max-h-0 py-0' : 'opacity-100 max-h-20 py-0'}`}>
+            {/* Navigation Toolbar */}
+            <div className={`px-2 overflow-hidden transition-all duration-500 ease-out ${isWelcomeVisible ? 'opacity-0 max-h-0 py-0' : 'opacity-100 max-h-20 py-0'}`}>
                 <div className="bg-white/90 backdrop-blur-md border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3">
                     <div className="flex items-center gap-1">
                         <button
-                            onClick={onGoBack}
+                            onClick={goBack}
                             disabled={!canGoBack}
                             className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoBack ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
                         >
                             <ArrowLeft size={16} />
                         </button>
                         <button
-                            onClick={onGoForward}
+                            onClick={goForward}
                             disabled={!canGoForward}
                             className={`p-1.5 rounded-full hover:bg-gray-100 transition-colors ${!canGoForward ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600'}`}
                         >
                             <ArrowRight size={16} />
                         </button>
-                        <button onClick={onReload} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
-                            {isLoading ? (
-                                <Loader2 size={16} className="animate-spin" />
-                            ) : (
-                                <RotateCw size={16} />
-                            )}
+                        <button onClick={reload} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition-colors">
+                            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />}
                         </button>
                     </div>
 
-                    <form onSubmit={onNavigate} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
+                    <form onSubmit={navigate} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
                         <input
                             type="text"
                             value={inputUrl}
-                            onChange={(e) => onInputUrlChange(e.target.value)}
+                            onChange={(e) => setInputUrl(e.target.value)}
                             className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
                             placeholder="Enter URL..."
                         />
