@@ -92,23 +92,6 @@ export function WelcomePage({ onNavigate, isExiting }: WelcomePageProps) {
 
             {/* Content */}
             <div className="relative z-10 w-full max-w-md px-8">
-                {/* Logo */}
-                <div
-                    className={`
-                        flex justify-center mb-12
-                        transition-all duration-700 delay-100
-                        ${isExiting ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'}
-                    `}
-                >
-                    <div className="relative">
-                        <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center">
-                            <span className="text-white text-lg font-semibold tracking-tight">V</span>
-                        </div>
-                        {/* Subtle glow */}
-                        <div className="absolute inset-0 bg-zinc-900/20 rounded-xl blur-xl -z-10" />
-                    </div>
-                </div>
-
                 {/* Search Input */}
                 <form
                     onSubmit={handleSubmit}
