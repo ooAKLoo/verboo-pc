@@ -1,3 +1,2 @@
-export { NavigationProvider, useNavigation } from './NavigationContext';
-export { ViewProvider, useView } from './ViewContext';
-export type { ViewMode } from './ViewContext';
+export { AppProvider, useApp } from './AppContext';
+export type { ViewMode } from './AppContext';

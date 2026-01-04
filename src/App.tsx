@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { Sidebar } from './components/Sidebar';
 import { BrowserView } from './components/BrowserView';
-import type { BrowserViewHandle, NavigationState } from './components/BrowserView';
 import { InfoPanel } from './components/InfoPanel';
 import { LearningPanel } from './components/LearningPanel';
 import { AssetPanelFull } from './components/AssetPanelFull';
@@ -15,7 +14,7 @@ import { Toast } from './components/Toast';
 import type { SubtitleItem } from './utils/subtitleParser';
 import type { Asset, ScreenshotTypeData } from './components/AssetCard';
 import { PanelLeft, PanelRight } from 'lucide-react';
-import { ViewProvider, useView, NavigationProvider, useNavigation } from './contexts';
+import { AppProvider, useApp } from './contexts';
 
 interface ToastState {
   id: string;
@@ -28,29 +27,26 @@ interface PendingAISubtitle {
   count: number;
 }
 
-// 内部 App 组件，使用 Context
+// ============ 主内容组件 ============
+
 function AppContent() {
   const { ipcRenderer } = window.require('electron');
 
-  // 从 Context 获取视图状态
+  // 从 AppContext 获取所有状态和方法
   const {
     viewMode,
     isWelcomeExiting,
-    isInWelcomeMode,
+    hasNavigated,
     leftCollapsed,
     rightCollapsed,
     toggleLeftPanel,
     toggleRightPanel,
     setRightCollapsed,
-    exitWelcomeAndNavigate,
     closePanel,
-  } = useView();
-
-  // 从 Context 获取导航状态
-  const {
-    browserRef,
     currentUrl,
     pageTitle,
+    currentVideoTime,
+    browserRef,
     updateNavigationState,
     updateCurrentUrl,
     updatePageTitle,
@@ -58,36 +54,29 @@ function AppContent() {
     updateVideoDuration,
     pendingSeekRef,
     navigateToUrl,
-  } = useNavigation();
+    pauseVideo,
+  } = useApp();
 
-  // 对话框状态
+  // -------- 本地状态（业务相关） --------
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
   const [showEnglishLearning, setShowEnglishLearning] = useState(false);
   const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
   const [editingScreenshot, setEditingScreenshot] = useState<any>(null);
-
-  // Toast state
   const [toast, setToast] = useState<ToastState | null>(null);
-
-  // 字幕和素材数据
   const [subtitleData, setSubtitleData] = useState<SubtitleItem[] | null>(null);
   const [materialRefreshTrigger, setMaterialRefreshTrigger] = useState(0);
   const [subtitleMarks, setSubtitleMarks] = useState<Array<{ timestamp: number; markType: 'important' | 'difficult' }>>([]);
-
-  // Track last loaded URL
+  const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
   const lastLoadedUrlRef = useRef<string>('');
 
-  // Pending AI subtitle
-  const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
-
-  // Toast helpers
+  // -------- Toast --------
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success') => {
     setToast({ id: Date.now().toString(), message, type });
   }, []);
 
   const hideToast = useCallback(() => setToast(null), []);
 
-  // AI subtitle handlers
+  // -------- AI字幕 --------
   const acceptAISubtitle = useCallback(async () => {
     if (!pendingAISubtitle) return;
     setSubtitleData(pendingAISubtitle.data);
@@ -99,11 +88,11 @@ function AppContent() {
     setPendingAISubtitle(null);
     if (rightCollapsed) setRightCollapsed(false);
     showToast('AI字幕已替换', 'success');
-  }, [pendingAISubtitle, currentUrl, pageTitle, rightCollapsed, setRightCollapsed, showToast]);
+  }, [pendingAISubtitle, currentUrl, pageTitle, rightCollapsed, setRightCollapsed, showToast, browserRef]);
 
   const dismissAISubtitle = useCallback(() => setPendingAISubtitle(null), []);
 
-  // Auto-load subtitles
+  // -------- 自动加载字幕 --------
   useEffect(() => {
     if (!currentUrl || lastLoadedUrlRef.current === currentUrl) return;
     const isVideoPage = currentUrl.includes('youtube.com/watch') || currentUrl.includes('bilibili.com/video');
@@ -126,13 +115,13 @@ function AppContent() {
     loadSubtitles();
   }, [currentUrl, subtitleData, ipcRenderer]);
 
-  // URL change handler
+  // -------- URL变化处理 --------
   const handleUrlChange = useCallback((url: string) => {
     if (url !== currentUrl) setSubtitleMarks([]);
     updateCurrentUrl(url);
   }, [currentUrl, updateCurrentUrl]);
 
-  // Subtitle handlers
+  // -------- 字幕操作 --------
   const handleGetYouTubeSubtitles = async () => {
     if (!browserRef.current) return;
     const url = browserRef.current.getCurrentUrl();
@@ -178,7 +167,7 @@ function AppContent() {
     }
   };
 
-  // Screenshot handler
+  // -------- 截图 --------
   type MarkType = 'none' | 'important' | 'difficult';
   const handleCaptureScreenshot = async (markType: MarkType = 'none') => {
     if (!browserRef.current) {
@@ -216,8 +205,7 @@ function AppContent() {
         if (markType === 'important' || markType === 'difficult') {
           setSubtitleMarks(prev => [...prev, { timestamp: result.timestamp, markType }]);
         }
-        const toastMessage = markType === 'important' ? '已标记为重点' : markType === 'difficult' ? '已标记为难点' : '已保存到截图库';
-        showToast(toastMessage, 'screenshot');
+        showToast(markType === 'important' ? '已标记为重点' : markType === 'difficult' ? '已标记为难点' : '已保存到截图库', 'screenshot');
       } else {
         throw new Error(response.error || '保存失败');
       }
@@ -226,8 +214,9 @@ function AppContent() {
     }
   };
 
-  // Screenshot editor
+  // -------- 截图编辑 --------
   const handleEditScreenshot = async (asset: Asset) => {
+    pauseVideo();
     await ipcRenderer.invoke('wcv-hide-all');
     const typeData = asset.typeData as ScreenshotTypeData;
     let subtitles: SubtitleItem[] = [];
@@ -259,11 +248,12 @@ function AppContent() {
     }
   };
 
-  // Browser data handler
+  // -------- BrowserView 数据回调 --------
   const handleBrowserData = useCallback((data: any) => {
     if (data?.type === 'video-time') {
       updateVideoTime(data.data.currentTime);
       if (data.data.duration) updateVideoDuration(data.data.duration);
+      // 处理恢复播放位置
       if (pendingSeekRef.current !== null && data.data.currentTime > 0) {
         const seekTo = pendingSeekRef.current;
         pendingSeekRef.current = null;
@@ -271,24 +261,25 @@ function AppContent() {
       }
     } else if (data?.type === 'subtitle') {
       setSubtitleData(prev => [...(Array.isArray(prev) ? prev : []), data]);
-      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+      if (rightCollapsed && hasNavigated) setRightCollapsed(false);
     } else if (data?.type === 'transcript') {
       setSubtitleData(data.data);
-      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+      if (rightCollapsed && hasNavigated) setRightCollapsed(false);
     } else if (data?.type === 'material-saved') {
       setMaterialRefreshTrigger(prev => prev + 1);
-      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+      if (rightCollapsed && hasNavigated) setRightCollapsed(false);
     } else if (data?.type === 'bilibili-ai-subtitle') {
       setPendingAISubtitle({ data: data.data, count: data.count });
     } else if (data) {
       setSubtitleData(data);
-      if (rightCollapsed && !isInWelcomeMode) setRightCollapsed(false);
+      if (rightCollapsed && hasNavigated) setRightCollapsed(false);
     }
-  }, [rightCollapsed, isInWelcomeMode, setRightCollapsed, updateVideoTime, updateVideoDuration, pendingSeekRef, browserRef]);
+  }, [rightCollapsed, hasNavigated, setRightCollapsed, updateVideoTime, updateVideoDuration, pendingSeekRef, browserRef]);
 
+  // -------- 渲染 --------
   return (
     <div className="w-full h-full font-sans antialiased text-primary bg-background selection:bg-accent/20">
-      {/* Dialogs */}
+      {/* 对话框 */}
       <SubtitleDialog
         isOpen={isSubtitleDialogOpen}
         onClose={() => { setIsSubtitleDialogOpen(false); ipcRenderer.invoke('wcv-show-active'); }}
@@ -308,7 +299,7 @@ function AppContent() {
 
       {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      {/* AI Subtitle Prompt */}
+      {/* AI字幕提示 */}
       {pendingAISubtitle && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
@@ -324,14 +315,14 @@ function AppContent() {
         </div>
       )}
 
-      {/* Titlebar */}
+      {/* 标题栏 */}
       <div className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <button onClick={toggleLeftPanel} className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all">
             <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
           </button>
         </div>
-        {!isInWelcomeMode && (
+        {hasNavigated && (
           <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             <button
               onClick={() => viewMode !== 'browser' ? closePanel() : toggleRightPanel()}
@@ -343,7 +334,7 @@ function AppContent() {
         )}
       </div>
 
-      {/* Layout */}
+      {/* 布局 */}
       <Layout
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
@@ -352,7 +343,7 @@ function AppContent() {
         subtitleMode={viewMode === 'subtitle'}
         left={
           <Sidebar
-            onOpenSubtitleDialog={() => { ipcRenderer.invoke('wcv-hide-all'); setIsSubtitleDialogOpen(true); }}
+            onOpenSubtitleDialog={() => { pauseVideo(); ipcRenderer.invoke('wcv-hide-all'); setIsSubtitleDialogOpen(true); }}
             onCaptureScreenshot={handleCaptureScreenshot}
           />
         }
@@ -375,7 +366,7 @@ function AppContent() {
         right={
           <InfoPanel
             data={subtitleData}
-            currentVideoTime={0}
+            currentVideoTime={currentVideoTime}
             materialRefreshTrigger={materialRefreshTrigger}
             onEditScreenshot={handleEditScreenshot}
             showEnglishLearning={showEnglishLearning}
@@ -392,38 +383,15 @@ function AppContent() {
   );
 }
 
-// 根组件：提供 Context Providers
+// ============ 根组件 ============
+
 function App() {
   const { ipcRenderer } = window.require('electron');
 
   return (
-    <ViewProvider
-      onWcvShow={() => ipcRenderer.invoke('wcv-show-active')}
-      onWcvHide={() => ipcRenderer.invoke('wcv-hide-all')}
-    >
-      <NavigationProviderWrapper>
-        <AppContent />
-      </NavigationProviderWrapper>
-    </ViewProvider>
-  );
-}
-
-// NavigationProvider 包装器，需要访问 useView
-function NavigationProviderWrapper({ children }: { children: React.ReactNode }) {
-  const { isInWelcomeMode, viewMode, exitWelcomeAndNavigate, switchView } = useView();
-
-  const handleNavigateToUrl = useCallback(async (url: string, seekTo?: number) => {
-    if (isInWelcomeMode && viewMode === 'welcome') {
-      await exitWelcomeAndNavigate();
-    } else if (viewMode !== 'browser') {
-      switchView('browser');
-    }
-  }, [isInWelcomeMode, viewMode, exitWelcomeAndNavigate, switchView]);
-
-  return (
-    <NavigationProvider onNavigateToUrl={handleNavigateToUrl}>
-      {children}
-    </NavigationProvider>
+    <AppProvider ipcRenderer={ipcRenderer}>
+      <AppContent />
+    </AppProvider>
   );
 }
 

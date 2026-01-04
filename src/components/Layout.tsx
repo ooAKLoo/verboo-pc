@@ -70,51 +70,56 @@ export function Layout({ left, main, right, learning, asset, subtitle, leftColla
                 {left}
             </div>
 
-            {/* Learning Mode - Full width panel replacing main + right */}
-            {learningMode ? (
+            {/* Panel Modes - Full width panel */}
+            {learningMode && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {learning}
                 </div>
-            ) : assetMode ? (
+            )}
+            {assetMode && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {asset}
                 </div>
-            ) : subtitleMode ? (
+            )}
+            {subtitleMode && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {subtitle}
                 </div>
-            ) : (
-                <>
-                    {/* Main Content - Floating Card */}
-                    <div className="flex-1 flex flex-col min-w-0 relative floating-card bg-dot-grid overflow-hidden">
-                        {main}
-                    </div>
+            )}
 
-                    {/* Resizer - iPad 风格拖拽条，宽度等于 gap 宽度 */}
-                    {!rightCollapsed && (
-                        <div
-                            className="flex items-center justify-center flex-shrink-0 cursor-col-resize group w-3 mx-0"
-                            onMouseDown={handleMouseDown}
-                        >
-                            {/* 可视拖拽手柄 */}
-                            <div
-                                className={`w-1 rounded-full transition-all duration-200 ease-out ${isResizing
-                                    ? 'h-16 bg-gray-500'
-                                    : 'h-8 bg-gray-300 group-hover:h-12 group-hover:bg-gray-500'
-                                    }`}
-                            />
-                        </div>
-                    )}
+            {/* Main Content - 始终存在，panel 模式时隐藏 */}
+            <div
+                className={`flex-1 flex flex-col min-w-0 relative floating-card bg-dot-grid overflow-hidden ${
+                    learningMode || assetMode || subtitleMode ? 'hidden' : ''
+                }`}
+            >
+                {main}
+            </div>
 
-                    {/* Right Sidebar - Floating Card */}
+            {/* Resizer - iPad 风格拖拽条 */}
+            {!rightCollapsed && !learningMode && !assetMode && !subtitleMode && (
+                <div
+                    className="flex items-center justify-center flex-shrink-0 cursor-col-resize group w-3 mx-0"
+                    onMouseDown={handleMouseDown}
+                >
                     <div
-                        className={`transition-opacity duration-300 ease-in-out floating-card z-20 overflow-hidden ${rightCollapsed ? 'w-0 opacity-0 p-0' : 'opacity-100'
+                        className={`w-1 rounded-full transition-all duration-200 ease-out ${isResizing
+                            ? 'h-16 bg-gray-500'
+                            : 'h-8 bg-gray-300 group-hover:h-12 group-hover:bg-gray-500'
                             }`}
-                        style={{ width: rightCollapsed ? 0 : `${rightWidth}px` }}
-                    >
-                        {right}
-                    </div>
-                </>
+                    />
+                </div>
+            )}
+
+            {/* Right Sidebar - Floating Card */}
+            {!learningMode && !assetMode && !subtitleMode && (
+                <div
+                    className={`transition-opacity duration-300 ease-in-out floating-card z-20 overflow-hidden ${rightCollapsed ? 'w-0 opacity-0 p-0' : 'opacity-100'
+                        }`}
+                    style={{ width: rightCollapsed ? 0 : `${rightWidth}px` }}
+                >
+                    {right}
+                </div>
             )}
         </div>
     );

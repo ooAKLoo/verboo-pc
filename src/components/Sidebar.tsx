@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles, BookOpen, Download } from 'lucide-react';
-import { useNavigation } from '../contexts/NavigationContext';
-import { useView } from '../contexts/ViewContext';
+import { useApp } from '../contexts';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -119,8 +118,9 @@ export function Sidebar({
     onOpenSubtitleDialog,
     onCaptureScreenshot,
 }: SidebarProps) {
-    // 从 Context 获取导航状态
+    // 从统一的 AppContext 获取状态和方法
     const {
+        // 导航状态
         inputUrl,
         isLoading,
         canGoBack,
@@ -129,20 +129,18 @@ export function Sidebar({
         pageTitle,
         currentVideoTime,
         videoDuration,
+        // 视图状态
+        viewMode,
+        isWelcomeVisible,
+        // 方法
         setInputUrl,
         navigate,
         navigateToUrl,
         goBack,
         goForward,
         reload,
-    } = useNavigation();
-
-    // 从 Context 获取视图状态
-    const {
-        viewMode,
-        isWelcomeVisible,
         switchView,
-    } = useView();
+    } = useApp();
 
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
 
