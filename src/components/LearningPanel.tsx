@@ -42,8 +42,8 @@ interface HoverCardState {
 function useWordHoverCard(delay: number = 400) {
     const [hoverState, setHoverState] = useState<HoverCardState | null>(null);
     const [isVisible, setIsVisible] = useState(false);
-    const showTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingWordRef = useRef<HoverCardState | null>(null);
 
     const showCard = useCallback((word: DifficultWord, x: number, y: number) => {

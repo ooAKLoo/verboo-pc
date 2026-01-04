@@ -13,7 +13,9 @@ import type { ScreenshotSaveData } from './components/ScreenshotDialog';
 import { Toast } from './components/Toast';
 import type { SubtitleItem } from './utils/subtitleParser';
 import type { Asset, ScreenshotTypeData } from './components/AssetCard';
-import { PanelLeft, PanelRight } from 'lucide-react';
+import { PanelLeft, PanelRight, Settings } from 'lucide-react';
+import { SettingsPanel } from './components/SettingsPanel';
+import { analytics, initErrorHandling } from './services/analytics';
 import { AppProvider, useApp } from './contexts';
 
 interface ToastState {
@@ -57,7 +59,14 @@ function AppContent() {
     pauseVideo,
   } = useApp();
 
+  // -------- 初始化分析服务 --------
+  useEffect(() => {
+    analytics.init();
+    initErrorHandling();
+  }, []);
+
   // -------- 本地状态（业务相关） --------
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubtitleDialogOpen, setIsSubtitleDialogOpen] = useState(false);
   const [showEnglishLearning, setShowEnglishLearning] = useState(false);
   const [isScreenshotEditorOpen, setIsScreenshotEditorOpen] = useState(false);
@@ -299,6 +308,8 @@ function AppContent() {
 
       {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onClose={hideToast} />}
 
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
       {/* AI字幕提示 */}
       {pendingAISubtitle && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
@@ -322,16 +333,22 @@ function AppContent() {
             <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
           </button>
         </div>
-        {hasNavigated && (
-          <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          {hasNavigated && (
             <button
               onClick={() => viewMode !== 'browser' ? closePanel() : toggleRightPanel()}
               className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
             >
               <PanelRight size={16} className={(rightCollapsed && viewMode === 'browser') ? "opacity-50" : "opacity-100"} />
             </button>
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
 
       {/* 布局 */}

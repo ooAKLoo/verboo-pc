@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check } from 'lucide-react';
+import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check, Edit3 } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
 
@@ -759,9 +759,10 @@ function ScreenshotDetailView({
 interface AssetPanelFullProps {
     onClose: () => void;
     refreshTrigger?: number;
+    onEditScreenshot?: (asset: Asset) => void;
 }
 
-export function AssetPanelFull({ onClose, refreshTrigger = 0 }: AssetPanelFullProps) {
+export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }: AssetPanelFullProps) {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<FilterType>('all');

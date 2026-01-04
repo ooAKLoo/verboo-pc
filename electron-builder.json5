@@ -1,0 +1,96 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+
+  // 应用标识 - 这是防止重复安装的关键
+  "appId": "com.verboo.app",
+  "productName": "Verboo",
+
+  // 输出目录
+  "directories": {
+    "output": "release",
+    "buildResources": "resources"
+  },
+
+  // 包含的文件
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "resources/**/*"
+  ],
+
+  // 原生模块重编译 (better-sqlite3)
+  "npmRebuild": true,
+  "nodeGypRebuild": false,
+
+  // 自动更新配置 - 使用 GitHub Releases
+  "publish": {
+    "provider": "github",
+    "owner": "ooAKLoo",
+    "repo": "verboo-pc"
+  },
+
+  // macOS 配置
+  "mac": {
+    "category": "public.app-category.education",
+    "icon": "resources/icon.icns",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["arm64"]
+      }
+    ],
+    // 签名配置 - Apple Developer
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.plist",
+    // 公证配置
+    "notarize": {
+      "teamId": "9YFT3H8S93"
+    }
+  },
+
+  // DMG 配置
+  "dmg": {
+    "iconSize": 100,
+    "contents": [
+      { "x": 130, "y": 220 },
+      { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+    ]
+  },
+
+  // Windows 配置
+  "win": {
+    "icon": "resources/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    // Azure Trusted Signing (可选，初期可不配置)
+    // "azureSignOptions": {
+    //   "endpoint": "https://eus.codesigning.azure.net",
+    //   "codeSigningAccountName": "YOUR_ACCOUNT",
+    //   "certificateProfileName": "YOUR_PROFILE"
+    // }
+  },
+
+  // NSIS 安装器配置 - 防止重复安装的关键
+  "nsis": {
+    "oneClick": true,           // 一键安装，无需用户选择
+    "perMachine": false,        // 安装到当前用户目录
+    "allowToChangeInstallationDirectory": false,
+    "deleteAppDataOnUninstall": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Verboo"
+  },
+
+  // Linux 配置
+  "linux": {
+    "icon": "resources/icons",
+    "category": "Education",
+    "target": ["AppImage", "deb"]
+  }
+}

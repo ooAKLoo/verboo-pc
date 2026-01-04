@@ -1,6 +1,20 @@
 import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
 import path from 'path';
 
+// 自动更新 (仅在生产环境启用)
+let updaterInitialized = false;
+async function initUpdaterIfNeeded(win: BrowserWindow) {
+    if (updaterInitialized || process.env.VITE_DEV_SERVER_URL) return;
+    try {
+        const { initUpdater } = await import('./updater');
+        initUpdater(win);
+        updaterInitialized = true;
+        console.log('[Main] Updater initialized');
+    } catch (error) {
+        console.log('[Main] Updater not available:', error);
+    }
+}
+
 // Set app name as early as possible (before ready event)
 app.name = 'Verboo';
 import { getYouTubeSubtitles } from './youtube-service';
@@ -331,6 +345,8 @@ function createWindow() {
         win.webContents.openDevTools();
     } else {
         win.loadFile(path.join(__dirname, '../dist/index.html'));
+        // 生产环境初始化自动更新
+        initUpdaterIfNeeded(win);
     }
 
     // Clean up views when window is closed

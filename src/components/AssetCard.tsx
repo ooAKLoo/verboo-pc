@@ -13,6 +13,7 @@ export interface ScreenshotTypeData {
     timestamp: number;
     imageData: string;
     finalImageData?: string;
+    markType?: 'important' | 'difficult';
     selectedSubtitles?: Array<{
         start: number;
         end: number;

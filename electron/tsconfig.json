@@ -12,6 +12,7 @@
     "include": [
         "main.ts",
         "preload.ts",
-        "webview-preload.ts"
+        "webview-preload.ts",
+        "updater.ts"
     ]
 }
