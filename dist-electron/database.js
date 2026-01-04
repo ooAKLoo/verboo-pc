@@ -5,6 +5,39 @@
  * Unified asset management system for storing all types of captured materials.
  * Uses better-sqlite3 for synchronous database operations.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -34,6 +67,12 @@ exports.getWordDifficulty = getWordDifficulty;
 exports.analyzeTextDifficulty = analyzeTextDifficulty;
 exports.getVocabularyByCategory = getVocabularyByCategory;
 exports.getVocabularyStats = getVocabularyStats;
+exports.downloadImageAsBase64 = downloadImageAsBase64;
+exports.saveOrUpdatePlatformIcon = saveOrUpdatePlatformIcon;
+exports.getPlatformIcon = getPlatformIcon;
+exports.saveOrUpdateAuthorAvatar = saveOrUpdateAuthorAvatar;
+exports.getAuthorAvatar = getAuthorAvatar;
+exports.getAuthorAvatarByName = getAuthorAvatarByName;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
 const electron_1 = require("electron");
@@ -91,6 +130,28 @@ function initDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_subtitles_video_url ON subtitles(video_url);
+
+    -- Platform icons table (shared across same platform)
+    CREATE TABLE IF NOT EXISTS platform_icons (
+      platform TEXT PRIMARY KEY,
+      icon_data TEXT,
+      source_url TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Author avatars table (shared across same author)
+    CREATE TABLE IF NOT EXISTS author_avatars (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      platform TEXT NOT NULL,
+      author_profile_url TEXT NOT NULL,
+      author_name TEXT,
+      avatar_data TEXT,
+      source_url TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(platform, author_profile_url)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_author_avatars_lookup ON author_avatars(platform, author_profile_url);
   `);
     console.log('[Database] Database initialized successfully');
     return db;
@@ -138,6 +199,73 @@ function rowToAsset(row) {
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
     };
+}
+/**
+ * Enhance assets with locally stored icons and avatars
+ * This replaces remote URLs with local base64 data when available
+ */
+function enhanceAssetsWithLocalMedia(assets) {
+    const db = getDatabase();
+    // Collect unique platforms and author profile URLs
+    const platforms = new Set();
+    const authorKeys = new Set(); // "platform|profileUrl"
+    for (const asset of assets) {
+        if (asset.platform) {
+            platforms.add(asset.platform);
+        }
+        if (asset.platform && asset.author?.profileUrl) {
+            authorKeys.add(`${asset.platform}|${asset.author.profileUrl}`);
+        }
+    }
+    // Batch fetch platform icons
+    const platformIcons = new Map();
+    if (platforms.size > 0) {
+        const platformList = Array.from(platforms);
+        const placeholders = platformList.map(() => '?').join(',');
+        const iconRows = db.prepare(`SELECT platform, icon_data FROM platform_icons WHERE platform IN (${placeholders}) AND icon_data IS NOT NULL`).all(...platformList);
+        for (const row of iconRows) {
+            platformIcons.set(row.platform, row.icon_data);
+        }
+    }
+    // Batch fetch author avatars
+    const authorAvatars = new Map();
+    if (authorKeys.size > 0) {
+        // Build query for all author keys
+        const conditions = [];
+        const params = [];
+        for (const key of authorKeys) {
+            const [platform, profileUrl] = key.split('|');
+            conditions.push('(platform = ? AND author_profile_url = ?)');
+            params.push(platform, profileUrl);
+        }
+        const avatarRows = db.prepare(`SELECT platform, author_profile_url, avatar_data FROM author_avatars
+             WHERE (${conditions.join(' OR ')}) AND avatar_data IS NOT NULL`).all(...params);
+        for (const row of avatarRows) {
+            authorAvatars.set(`${row.platform}|${row.author_profile_url}`, row.avatar_data);
+        }
+    }
+    // Enhance assets with local media
+    return assets.map(asset => {
+        const enhanced = { ...asset };
+        // Replace favicon with local icon if available
+        if (asset.platform) {
+            const localIcon = platformIcons.get(asset.platform);
+            if (localIcon) {
+                enhanced.favicon = localIcon;
+            }
+        }
+        // Replace author avatar with local avatar if available
+        if (asset.platform && asset.author?.profileUrl) {
+            const localAvatar = authorAvatars.get(`${asset.platform}|${asset.author.profileUrl}`);
+            if (localAvatar && asset.author) {
+                enhanced.author = {
+                    ...asset.author,
+                    avatar: localAvatar
+                };
+            }
+        }
+        return enhanced;
+    });
 }
 /**
  * Save a content asset
@@ -241,7 +369,9 @@ function getAssets(options = {}) {
     console.log('[Database] Query:', query, 'Params:', params.slice(0, -2));
     const rows = db.prepare(query).all(...params);
     console.log('[Database] Found', rows.length, 'assets');
-    return rows.map(rowToAsset);
+    const assets = rows.map(rowToAsset);
+    // Enhance with locally stored icons and avatars
+    return enhanceAssetsWithLocalMedia(assets);
 }
 /**
  * Get a single asset by ID
@@ -249,7 +379,12 @@ function getAssets(options = {}) {
 function getAssetById(id) {
     const db = getDatabase();
     const row = db.prepare('SELECT * FROM assets WHERE id = ?').get(id);
-    return row ? rowToAsset(row) : null;
+    if (!row)
+        return null;
+    const asset = rowToAsset(row);
+    // Enhance with locally stored icons and avatars
+    const enhanced = enhanceAssetsWithLocalMedia([asset]);
+    return enhanced[0];
 }
 /**
  * Update an asset
@@ -311,7 +446,9 @@ function searchAssets(keyword, options = {}) {
     query += ' ORDER BY created_at DESC LIMIT ?';
     params.push(limit);
     const rows = db.prepare(query).all(...params);
-    return rows.map(rowToAsset);
+    const assets = rows.map(rowToAsset);
+    // Enhance with locally stored icons and avatars
+    return enhanceAssetsWithLocalMedia(assets);
 }
 /**
  * Get total count of assets
@@ -617,21 +754,11 @@ function getVocabularyByCategory(category = 'all', limit = 100, offset = 0) {
     if (category !== 'all' && categoryMap[category]) {
         whereClause = `WHERE ${categoryMap[category]}`;
     }
-    // Query with ordering by difficulty indicators
+    // Query with ordering - alphabetical by default for consistent pagination
     const query = `
         SELECT * FROM words
         ${whereClause}
-        ORDER BY
-            CASE
-                WHEN cefr_level = 'C2' THEN 1
-                WHEN cefr_level = 'C1' THEN 2
-                WHEN is_gre = 1 THEN 3
-                WHEN cefr_level = 'B2' THEN 4
-                WHEN is_toefl = 1 OR is_ielts = 1 THEN 5
-                ELSE 6
-            END,
-            coca_rank DESC NULLS LAST,
-            word ASC
+        ORDER BY word ASC
         LIMIT ? OFFSET ?
     `;
     try {
@@ -690,4 +817,178 @@ function getVocabularyStats() {
         console.error('[Database] getVocabularyStats - error:', error);
         return {};
     }
+}
+/**
+ * Download image from URL and convert to base64
+ * Returns null if download fails
+ */
+async function downloadImageAsBase64(url) {
+    if (!url)
+        return null;
+    try {
+        // Use dynamic import for node-fetch compatibility
+        const { net } = await Promise.resolve().then(() => __importStar(require('electron')));
+        return new Promise((resolve) => {
+            const request = net.request(url);
+            const chunks = [];
+            request.on('response', (response) => {
+                if (response.statusCode !== 200) {
+                    console.log('[Database] downloadImageAsBase64 - non-200 status:', response.statusCode);
+                    resolve(null);
+                    return;
+                }
+                const contentType = response.headers['content-type'];
+                let mimeType = 'image/png';
+                if (contentType) {
+                    if (Array.isArray(contentType)) {
+                        mimeType = contentType[0] || 'image/png';
+                    }
+                    else {
+                        mimeType = contentType;
+                    }
+                }
+                response.on('data', (chunk) => {
+                    chunks.push(chunk);
+                });
+                response.on('end', () => {
+                    try {
+                        const buffer = Buffer.concat(chunks);
+                        const base64 = buffer.toString('base64');
+                        const dataUrl = `data:${mimeType};base64,${base64}`;
+                        resolve(dataUrl);
+                    }
+                    catch (error) {
+                        console.error('[Database] downloadImageAsBase64 - encode error:', error);
+                        resolve(null);
+                    }
+                });
+                response.on('error', (error) => {
+                    console.error('[Database] downloadImageAsBase64 - response error:', error);
+                    resolve(null);
+                });
+            });
+            request.on('error', (error) => {
+                console.error('[Database] downloadImageAsBase64 - request error:', error);
+                resolve(null);
+            });
+            // Set timeout
+            setTimeout(() => {
+                request.abort();
+                resolve(null);
+            }, 10000); // 10 second timeout
+            request.end();
+        });
+    }
+    catch (error) {
+        console.error('[Database] downloadImageAsBase64 - error:', error);
+        return null;
+    }
+}
+/**
+ * Save or update platform icon
+ * Downloads the icon if not exists or URL changed
+ */
+async function saveOrUpdatePlatformIcon(platform, sourceUrl) {
+    if (!platform || !sourceUrl)
+        return null;
+    const db = getDatabase();
+    // Check if exists
+    const existing = db.prepare('SELECT * FROM platform_icons WHERE platform = ?').get(platform);
+    if (existing) {
+        // If URL hasn't changed, return existing data
+        if (existing.source_url === sourceUrl && existing.icon_data) {
+            console.log('[Database] Platform icon exists and URL unchanged:', platform);
+            return existing.icon_data;
+        }
+        // URL changed or no data, download and update
+        console.log('[Database] Updating platform icon:', platform);
+        const iconData = await downloadImageAsBase64(sourceUrl);
+        if (iconData) {
+            db.prepare(`
+                UPDATE platform_icons
+                SET icon_data = ?, source_url = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE platform = ?
+            `).run(iconData, sourceUrl, platform);
+            return iconData;
+        }
+        // Download failed, return existing data if available
+        return existing.icon_data;
+    }
+    // Not exists, download and insert
+    console.log('[Database] Saving new platform icon:', platform);
+    const iconData = await downloadImageAsBase64(sourceUrl);
+    db.prepare(`
+        INSERT INTO platform_icons (platform, icon_data, source_url)
+        VALUES (?, ?, ?)
+    `).run(platform, iconData, sourceUrl);
+    return iconData;
+}
+/**
+ * Get platform icon by platform ID
+ */
+function getPlatformIcon(platform) {
+    if (!platform)
+        return null;
+    const db = getDatabase();
+    const row = db.prepare('SELECT icon_data FROM platform_icons WHERE platform = ?').get(platform);
+    return row?.icon_data || null;
+}
+/**
+ * Save or update author avatar
+ * Downloads the avatar if not exists or URL changed
+ */
+async function saveOrUpdateAuthorAvatar(platform, profileUrl, sourceUrl, authorName) {
+    if (!platform || !profileUrl || !sourceUrl)
+        return null;
+    const db = getDatabase();
+    // Check if exists
+    const existing = db.prepare('SELECT * FROM author_avatars WHERE platform = ? AND author_profile_url = ?').get(platform, profileUrl);
+    if (existing) {
+        // If URL hasn't changed, return existing data
+        if (existing.source_url === sourceUrl && existing.avatar_data) {
+            console.log('[Database] Author avatar exists and URL unchanged:', authorName);
+            return existing.avatar_data;
+        }
+        // URL changed or no data, download and update
+        console.log('[Database] Updating author avatar:', authorName);
+        const avatarData = await downloadImageAsBase64(sourceUrl);
+        if (avatarData) {
+            db.prepare(`
+                UPDATE author_avatars
+                SET avatar_data = ?, source_url = ?, author_name = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE platform = ? AND author_profile_url = ?
+            `).run(avatarData, sourceUrl, authorName, platform, profileUrl);
+            return avatarData;
+        }
+        // Download failed, return existing data if available
+        return existing.avatar_data;
+    }
+    // Not exists, download and insert
+    console.log('[Database] Saving new author avatar:', authorName);
+    const avatarData = await downloadImageAsBase64(sourceUrl);
+    db.prepare(`
+        INSERT INTO author_avatars (platform, author_profile_url, author_name, avatar_data, source_url)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(platform, profileUrl, authorName, avatarData, sourceUrl);
+    return avatarData;
+}
+/**
+ * Get author avatar by platform and profile URL
+ */
+function getAuthorAvatar(platform, profileUrl) {
+    if (!platform || !profileUrl)
+        return null;
+    const db = getDatabase();
+    const row = db.prepare('SELECT avatar_data FROM author_avatars WHERE platform = ? AND author_profile_url = ?').get(platform, profileUrl);
+    return row?.avatar_data || null;
+}
+/**
+ * Get author avatar by platform and author name (fallback)
+ */
+function getAuthorAvatarByName(platform, authorName) {
+    if (!platform || !authorName)
+        return null;
+    const db = getDatabase();
+    const row = db.prepare('SELECT avatar_data FROM author_avatars WHERE platform = ? AND author_name = ? ORDER BY updated_at DESC LIMIT 1').get(platform, authorName);
+    return row?.avatar_data || null;
 }

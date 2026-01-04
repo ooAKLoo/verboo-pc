@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHROME_USER_AGENT = void 0;
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
+// Set app name as early as possible (before ready event)
+electron_1.app.name = 'Verboo';
 const youtube_service_1 = require("./youtube-service");
 const database_1 = require("./database");
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -263,6 +265,13 @@ function createWindow() {
     });
 }
 electron_1.app.whenReady().then(() => {
+    // Set app name for macOS Dock hover
+    electron_1.app.setName('Verboo');
+    // Set Dock icon on macOS (especially for development mode)
+    if (process.platform === 'darwin' && electron_1.app.dock) {
+        const iconPath = path_1.default.join(__dirname, '../resources/icon.png');
+        electron_1.app.dock.setIcon(iconPath);
+    }
     // Initialize databases
     (0, database_1.initDatabase)();
     (0, database_1.initVocabDatabase)();
@@ -548,6 +557,18 @@ function setupIpcHandlers() {
                 subtitleStyle: data.subtitleStyle,
                 subtitleId: data.subtitleId,
             });
+            // Async: Save platform icon and author avatar to local storage (non-blocking)
+            // This runs in background and doesn't block the screenshot save
+            if (data.platform && data.favicon) {
+                (0, database_1.saveOrUpdatePlatformIcon)(data.platform, data.favicon).catch(err => {
+                    console.error('[IPC] Failed to save platform icon:', err);
+                });
+            }
+            if (data.platform && data.author?.profileUrl && data.author?.avatar) {
+                (0, database_1.saveOrUpdateAuthorAvatar)(data.platform, data.author.profileUrl, data.author.avatar, data.author.name || '').catch(err => {
+                    console.error('[IPC] Failed to save author avatar:', err);
+                });
+            }
             return { success: true, data: asset };
         }
         catch (error) {
@@ -745,6 +766,36 @@ function setupIpcHandlers() {
         }
         catch (error) {
             console.error('[IPC] get-vocabulary-stats failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    // Get platform icon (local base64 data)
+    electron_1.ipcMain.handle('get-platform-icon', async (event, platform) => {
+        try {
+            const iconData = (0, database_1.getPlatformIcon)(platform);
+            return { success: true, data: iconData };
+        }
+        catch (error) {
+            console.error('[IPC] get-platform-icon failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    // Get author avatar (local base64 data)
+    electron_1.ipcMain.handle('get-author-avatar', async (event, options) => {
+        try {
+            let avatarData = null;
+            // Try to get by profile URL first (more accurate)
+            if (options.profileUrl) {
+                avatarData = (0, database_1.getAuthorAvatar)(options.platform, options.profileUrl);
+            }
+            // Fallback to author name if profile URL not available or not found
+            if (!avatarData && options.authorName) {
+                avatarData = (0, database_1.getAuthorAvatarByName)(options.platform, options.authorName);
+            }
+            return { success: true, data: avatarData };
+        }
+        catch (error) {
+            console.error('[IPC] get-author-avatar failed:', error);
             return { success: false, error: error.message };
         }
     });

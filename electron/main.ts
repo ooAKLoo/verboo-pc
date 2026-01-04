@@ -1,5 +1,8 @@
 import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
 import path from 'path';
+
+// Set app name as early as possible (before ready event)
+app.name = 'Verboo';
 import { getYouTubeSubtitles } from './youtube-service';
 import {
     initDatabase,
@@ -27,6 +30,12 @@ import {
     analyzeTextDifficulty,
     getVocabularyByCategory,
     getVocabularyStats,
+    // Platform icons & Author avatars functions
+    saveOrUpdatePlatformIcon,
+    saveOrUpdateAuthorAvatar,
+    getPlatformIcon,
+    getAuthorAvatar,
+    getAuthorAvatarByName,
     // Types
     type AssetType,
     type WordInfo
@@ -334,6 +343,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // Set app name for macOS Dock hover
+    app.setName('Verboo');
+
+    // Set Dock icon on macOS (especially for development mode)
+    if (process.platform === 'darwin' && app.dock) {
+        const iconPath = path.join(__dirname, '../resources/icon.png');
+        app.dock.setIcon(iconPath);
+    }
+
     // Initialize databases
     initDatabase();
     initVocabDatabase();
@@ -628,6 +646,26 @@ function setupIpcHandlers() {
                 subtitleStyle: data.subtitleStyle,
                 subtitleId: data.subtitleId,
             });
+
+            // Async: Save platform icon and author avatar to local storage (non-blocking)
+            // This runs in background and doesn't block the screenshot save
+            if (data.platform && data.favicon) {
+                saveOrUpdatePlatformIcon(data.platform, data.favicon).catch(err => {
+                    console.error('[IPC] Failed to save platform icon:', err);
+                });
+            }
+
+            if (data.platform && data.author?.profileUrl && data.author?.avatar) {
+                saveOrUpdateAuthorAvatar(
+                    data.platform,
+                    data.author.profileUrl,
+                    data.author.avatar,
+                    data.author.name || ''
+                ).catch(err => {
+                    console.error('[IPC] Failed to save author avatar:', err);
+                });
+            }
+
             return { success: true, data: asset };
         } catch (error) {
             console.error('[IPC] save-screenshot failed:', error);
@@ -833,6 +871,43 @@ function setupIpcHandlers() {
             return { success: true, data: stats };
         } catch (error) {
             console.error('[IPC] get-vocabulary-stats failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get platform icon (local base64 data)
+    ipcMain.handle('get-platform-icon', async (event, platform: string) => {
+        try {
+            const iconData = getPlatformIcon(platform);
+            return { success: true, data: iconData };
+        } catch (error) {
+            console.error('[IPC] get-platform-icon failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
+
+    // Get author avatar (local base64 data)
+    ipcMain.handle('get-author-avatar', async (event, options: {
+        platform: string;
+        profileUrl?: string;
+        authorName?: string;
+    }) => {
+        try {
+            let avatarData: string | null = null;
+
+            // Try to get by profile URL first (more accurate)
+            if (options.profileUrl) {
+                avatarData = getAuthorAvatar(options.platform, options.profileUrl);
+            }
+
+            // Fallback to author name if profile URL not available or not found
+            if (!avatarData && options.authorName) {
+                avatarData = getAuthorAvatarByName(options.platform, options.authorName);
+            }
+
+            return { success: true, data: avatarData };
+        } catch (error) {
+            console.error('[IPC] get-author-avatar failed:', error);
             return { success: false, error: (error as Error).message };
         }
     });

@@ -1,0 +1,28 @@
+<svg width="980" height="980" viewBox="0 0 980 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="980" height="980" fill="white"/>
+<g clip-path="url(#clip0_106_200)">
+<rect width="980" height="188" transform="translate(0 396)" fill="white" fill-opacity="0.17"/>
+<path d="M925 406V624" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M870 522.5V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M816 490V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M762 522V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M707 456V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M653 522.5V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M599 489.5V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M544 522V629" stroke="#FC0404" stroke-width="12" stroke-linecap="round"/>
+<path d="M490 425.5V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M436 522V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M382 490V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M328 523V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M273 458V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M219 521V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M164 489V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M110 519V629" stroke="black" stroke-width="12" stroke-linecap="round"/>
+<path d="M56 405.5L56 640" stroke="black" stroke-width="12" stroke-linecap="round"/>
+</g>
+<defs>
+<clipPath id="clip0_106_200">
+<rect width="980" height="188" fill="white" transform="translate(0 396)"/>
+</clipPath>
+</defs>
+</svg>
