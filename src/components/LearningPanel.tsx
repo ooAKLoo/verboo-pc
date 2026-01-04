@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { BookOpen, X, GraduationCap } from 'lucide-react';
 
-import {
+import type {
     WordInfo,
     DifficultWord,
     SubtitleRecord,
@@ -10,6 +10,8 @@ import {
     VocabCategory,
     SortDirection,
     TagFilterKey,
+} from './learning/types';
+import {
     VOCAB_CATEGORIES,
     CEFR_ORDER,
     difficultyColors
@@ -282,6 +284,7 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [activePopover, setActivePopover] = useState<string | null>(null);
     const [selectedTagFilters, setSelectedTagFilters] = useState<Set<TagFilterKey>>(new Set());
+    const [searchQuery, setSearchQuery] = useState('');
 
     const selectedRecord = useMemo(() => {
         if (selectedRecordId === null) return null;
@@ -424,6 +427,21 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
     const filteredWords = useMemo(() => {
         let words = [...currentWords];
 
+        // 搜索过滤：匹配单词、音标、释义
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase().trim();
+            words = words.filter(w => {
+                const word = w.word.toLowerCase();
+                const phonetic = (w.info.phonetic || '').toLowerCase();
+                const definitionCn = (w.info.definitionCn || '').toLowerCase();
+                const definitionEn = (w.info.definitionEn || '').toLowerCase();
+                return word.includes(query) ||
+                       phonetic.includes(query) ||
+                       definitionCn.includes(query) ||
+                       definitionEn.includes(query);
+            });
+        }
+
         if (selectedRecordId !== null && vocabCategory !== 'all') {
             const categoryConfig = VOCAB_CATEGORIES.find(c => c.value === vocabCategory);
             if (categoryConfig && categoryConfig.key) {
@@ -468,7 +486,7 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
         });
 
         return words;
-    }, [currentWords, vocabCategory, wordSortBy, sortDirection, selectedRecordId, selectedTagFilters]);
+    }, [currentWords, vocabCategory, wordSortBy, sortDirection, selectedRecordId, selectedTagFilters, searchQuery]);
 
     const filteredWordMap = useMemo(() => {
         const map = new Map<string, DifficultWord>();
@@ -499,11 +517,13 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
                     dbStats={dbStats}
                     showSubtitles={showSubtitles}
                     activePopover={activePopover}
+                    searchQuery={searchQuery}
                     onVideoSelect={handleVideoSelect}
                     onVocabCategoryChange={setVocabCategory}
                     onExport={(format) => exportWords(filteredWords, format)}
                     onToggleSubtitles={() => setShowSubtitles(!showSubtitles)}
                     onActivePopoverChange={setActivePopover}
+                    onSearchChange={setSearchQuery}
                 />
 
                 {/* Main Content */}

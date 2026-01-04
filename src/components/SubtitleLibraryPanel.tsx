@@ -507,19 +507,21 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                     />
                 </FilterPopover>
 
-                {/* Search Box */}
-                <div className="flex-1 flex items-center gap-2 px-3 py-1.5 bg-zinc-50 rounded-full">
-                    <Search size={13} className="text-zinc-400" />
+                <div className="flex-1" />
+
+                {/* Search Box - 紧凑设计 */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100/80 rounded-lg w-[200px]">
+                    <Search size={12} className="text-zinc-400 flex-shrink-0" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="搜索字幕内容..."
-                        className="flex-1 text-xs bg-transparent outline-none placeholder-zinc-400"
+                        placeholder="搜索字幕..."
+                        className="flex-1 text-[12px] bg-transparent outline-none placeholder-zinc-400 min-w-0"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="p-0.5 hover:bg-zinc-200 rounded-full">
-                            <X size={12} className="text-zinc-400" />
+                        <button onClick={() => setSearchQuery('')} className="p-0.5 hover:bg-zinc-200 rounded-full flex-shrink-0">
+                            <X size={10} className="text-zinc-400" />
                         </button>
                     )}
                 </div>

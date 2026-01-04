@@ -940,21 +940,11 @@ export function getVocabularyByCategory(
         whereClause = `WHERE ${categoryMap[category]}`;
     }
 
-    // Query with ordering by difficulty indicators
+    // Query with ordering - alphabetical by default for consistent pagination
     const query = `
         SELECT * FROM words
         ${whereClause}
-        ORDER BY
-            CASE
-                WHEN cefr_level = 'C2' THEN 1
-                WHEN cefr_level = 'C1' THEN 2
-                WHEN is_gre = 1 THEN 3
-                WHEN cefr_level = 'B2' THEN 4
-                WHEN is_toefl = 1 OR is_ielts = 1 THEN 5
-                ELSE 6
-            END,
-            coca_rank DESC NULLS LAST,
-            word ASC
+        ORDER BY word ASC
         LIMIT ? OFFSET ?
     `;
 

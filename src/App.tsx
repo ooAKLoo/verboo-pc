@@ -211,7 +211,7 @@ function App() {
   const WELCOME_EXIT_ANIMATION_MS = 500;
 
   // Navigate to URL, handling welcome page exit if needed
-  const handleNavigateToUrl = useCallback((url: string, seekTo?: number) => {
+  const handleNavigateToUrl = useCallback(async (url: string, seekTo?: number) => {
     // Store seek position if provided
     if (seekTo && seekTo > 0) {
       pendingSeekRef.current = seekTo;
@@ -220,19 +220,26 @@ function App() {
     if (showWelcome) {
       // Exit welcome page with animation
       setIsWelcomeExiting(true);
-      setTimeout(() => {
+      setTimeout(async () => {
         setShowWelcome(false);
         setIsWelcomeExiting(false);
         setLeftCollapsed(false);
         setRightCollapsed(false);
-        ipcRenderer.invoke('wcv-show-active');
+        await ipcRenderer.invoke('wcv-show-active');
         browserRef.current?.navigate(url);
       }, WELCOME_EXIT_ANIMATION_MS);
     } else {
+      // Close any open panels and show BrowserView
+      if (learningMode || assetMode || subtitleMode) {
+        setLearningMode(false);
+        setAssetMode(false);
+        setSubtitleMode(false);
+        await ipcRenderer.invoke('wcv-show-active');
+      }
       // Direct navigation
       browserRef.current?.navigate(url);
     }
-  }, [showWelcome, ipcRenderer]);
+  }, [showWelcome, learningMode, assetMode, subtitleMode, ipcRenderer]);
 
   const handleRunPlugin = async (script: string) => {
     if (browserRef.current) {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowDownUp, ChevronDown, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
-import {
+import type {
     DifficultWord,
     WordSortType,
     SortDirection,
     TableColumnSortKey,
     TagFilterKey,
+} from './types';
+import {
     COLUMN_SORT_MAP,
     TAG_FILTER_OPTIONS,
     CEFR_STYLES,

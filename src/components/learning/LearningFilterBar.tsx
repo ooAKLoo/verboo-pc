@@ -1,11 +1,64 @@
 import React, { useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, GraduationCap, Video, FileText, Download, FileDown, Printer } from 'lucide-react';
-import {
-    DifficultWord,
-    SubtitleRecord,
-    VocabCategory,
-    VOCAB_CATEGORIES
-} from './types';
+import { ChevronDown, ChevronUp, GraduationCap, Video, FileText, Download, FileDown, Printer, Search, X } from 'lucide-react';
+
+// 内联类型定义
+interface WordInfo {
+    word: string;
+    phonetic?: string;
+    definitionEn?: string;
+    definitionCn?: string;
+    pos?: string;
+    cefrLevel?: string;
+    collinsStar?: number;
+    cocaRank?: number;
+    bncRank?: number;
+    isOxford3000?: boolean;
+    isCet4?: boolean;
+    isCet6?: boolean;
+    isZk?: boolean;
+    isGk?: boolean;
+    isKy?: boolean;
+    isToefl?: boolean;
+    isIelts?: boolean;
+    isGre?: boolean;
+    exchange?: string;
+}
+
+interface DifficultWord {
+    word: string;
+    info: WordInfo;
+    difficulty: 'high' | 'medium' | 'low';
+}
+
+interface SubtitleRecord {
+    id: number;
+    videoUrl: string;
+    videoTitle: string;
+    platform: string;
+    subtitleData: Array<{
+        start: number;
+        duration?: number;
+        text: string;
+        translation?: string;
+    }>;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+type VocabCategory = 'all' | 'zk' | 'gk' | 'cet4' | 'cet6' | 'ky' | 'toefl' | 'ielts' | 'gre' | 'oxford3000';
+
+const VOCAB_CATEGORIES = [
+    { value: 'all', label: '全部词汇', key: null },
+    { value: 'zk', label: '中考', key: 'isZk' },
+    { value: 'gk', label: '高考', key: 'isGk' },
+    { value: 'cet4', label: 'CET-4', key: 'isCet4' },
+    { value: 'cet6', label: 'CET-6', key: 'isCet6' },
+    { value: 'ky', label: '考研', key: 'isKy' },
+    { value: 'toefl', label: 'TOEFL', key: 'isToefl' },
+    { value: 'ielts', label: 'IELTS', key: 'isIelts' },
+    { value: 'gre', label: 'GRE', key: 'isGre' },
+    { value: 'oxford3000', label: 'Oxford 3000', key: 'isOxford3000' },
+];
 
 // Export format options
 const EXPORT_FORMATS = [
@@ -17,9 +70,6 @@ const EXPORT_FORMATS = [
     { id: 'print', label: '打印背诵纸', desc: 'HTML 格式，可打印为 PDF', icon: Printer, extension: 'html' },
 ];
 
-/**
- * FilterTrigger - 筛选触发按钮
- */
 function FilterTrigger({
     icon,
     label,
@@ -54,9 +104,6 @@ function FilterTrigger({
     );
 }
 
-/**
- * FilterPopover - 筛选弹出面板容器
- */
 function FilterPopover({
     trigger,
     isOpen,
@@ -72,13 +119,11 @@ function FilterPopover({
 
     useEffect(() => {
         if (!isOpen) return;
-
         const handleClickOutside = (e: MouseEvent) => {
             if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
                 onClose();
             }
         };
-
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen, onClose]);
@@ -95,9 +140,6 @@ function FilterPopover({
     );
 }
 
-/**
- * VocabCategorySelector - 词库分类选择器
- */
 function VocabCategorySelector({
     selected,
     vocabStats,
@@ -143,9 +185,6 @@ function VocabCategorySelector({
     );
 }
 
-/**
- * VideoSelector - 数据来源选择器（仅视频）
- */
 function VideoSelector({
     records,
     selectedId,
@@ -220,9 +259,6 @@ function VideoSelector({
     );
 }
 
-/**
- * ExportMenu - 导出菜单组件
- */
 function ExportMenu({
     words,
     onExport
@@ -259,7 +295,6 @@ function ExportMenu({
     );
 }
 
-// Export utility functions
 export function exportWords(words: DifficultWord[], format: string) {
     let content = '';
     let filename = `vocabulary_${new Date().toISOString().slice(0, 10)}`;
@@ -397,11 +432,13 @@ export interface LearningFilterBarProps {
     dbStats: Record<string, number>;
     showSubtitles: boolean;
     activePopover: string | null;
+    searchQuery: string;
     onVideoSelect: (id: number | null) => void;
     onVocabCategoryChange: (category: VocabCategory) => void;
     onExport: (format: string) => void;
     onToggleSubtitles: () => void;
     onActivePopoverChange: (popover: string | null) => void;
+    onSearchChange: (query: string) => void;
 }
 
 export function LearningFilterBar({
@@ -415,11 +452,13 @@ export function LearningFilterBar({
     dbStats,
     showSubtitles,
     activePopover,
+    searchQuery,
     onVideoSelect,
     onVocabCategoryChange,
     onExport,
     onToggleSubtitles,
-    onActivePopoverChange
+    onActivePopoverChange,
+    onSearchChange
 }: LearningFilterBarProps) {
     return (
         <div className="flex-none px-8 py-3 flex items-center gap-3">
@@ -520,6 +559,26 @@ export function LearningFilterBar({
             )}
 
             <div className="flex-1" />
+
+            {/* Search Box - 紧凑设计 */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100/80 rounded-lg w-[180px]">
+                <Search size={12} className="text-zinc-400 flex-shrink-0" />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    placeholder="搜索单词..."
+                    className="flex-1 text-[12px] bg-transparent outline-none placeholder-zinc-400 min-w-0"
+                />
+                {searchQuery && (
+                    <button
+                        onClick={() => onSearchChange('')}
+                        className="p-0.5 hover:bg-zinc-200 rounded-full flex-shrink-0"
+                    >
+                        <X size={10} className="text-zinc-400" />
+                    </button>
+                )}
+            </div>
 
             {/* Word Count */}
             <span className="text-[12px] text-zinc-400 flex-none">

@@ -48,14 +48,12 @@ export type VocabCategory = 'all' | 'zk' | 'gk' | 'cet4' | 'cet6' | 'ky' | 'toef
 export type SortDirection = 'asc' | 'desc';
 export type TableColumnSortKey = 'word' | 'frequency' | 'cefr';
 
-// 列与排序类型的映射
 export const COLUMN_SORT_MAP: Record<TableColumnSortKey, WordSortType> = {
     word: 'alphabet',
     frequency: 'frequency',
     cefr: 'cefr'
 };
 
-// 标签筛选选项
 export const TAG_FILTER_OPTIONS = [
     { key: 'isZk', label: '中考' },
     { key: 'isGk', label: '高考' },
@@ -70,7 +68,6 @@ export const TAG_FILTER_OPTIONS = [
 
 export type TagFilterKey = typeof TAG_FILTER_OPTIONS[number]['key'];
 
-// Vocabulary category options
 export const VOCAB_CATEGORIES = [
     { value: 'all', label: '全部词汇', key: null },
     { value: 'zk', label: '中考', key: 'isZk' },
@@ -84,7 +81,6 @@ export const VOCAB_CATEGORIES = [
     { value: 'oxford3000', label: 'Oxford 3000', key: 'isOxford3000' },
 ];
 
-// CEFR 等级样式配置
 export const CEFR_STYLES: Record<string, { bg: string; text: string }> = {
     A1: { bg: 'bg-green-50', text: 'text-green-600' },
     A2: { bg: 'bg-green-100', text: 'text-green-700' },
@@ -94,7 +90,6 @@ export const CEFR_STYLES: Record<string, { bg: string; text: string }> = {
     C2: { bg: 'bg-purple-100', text: 'text-purple-700' },
 };
 
-// CEFR 等级排序权重
 export const CEFR_ORDER: Record<string, number> = {
     A1: 1,
     A2: 2,
@@ -104,7 +99,6 @@ export const CEFR_ORDER: Record<string, number> = {
     C2: 6,
 };
 
-// Difficulty level colors
 export const difficultyColors = {
     high: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500' },
     medium: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', dot: 'bg-amber-500' },

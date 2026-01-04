@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles, BookOpen, Download } from 'lucide-react';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -37,6 +37,39 @@ function getFaviconUrl(url: string): string {
     }
 }
 
+// Get normalized video URL for comparison (remove time params, keep video ID)
+function getNormalizedVideoUrl(url: string): string {
+    try {
+        const urlObj = new URL(url);
+
+        // YouTube: keep only v parameter
+        if (urlObj.hostname.includes('youtube.com') && urlObj.pathname === '/watch') {
+            const videoId = urlObj.searchParams.get('v');
+            if (videoId) {
+                return `https://www.youtube.com/watch?v=${videoId}`;
+            }
+        }
+
+        // Bilibili: keep only path (video ID), remove query params
+        if (urlObj.hostname.includes('bilibili.com') && urlObj.pathname.includes('/video/')) {
+            const match = urlObj.pathname.match(/\/video\/(BV[a-zA-Z0-9]+|av\d+)/);
+            if (match) {
+                return `https://www.bilibili.com/video/${match[1]}`;
+            }
+        }
+
+        // For other URLs, return as-is
+        return url;
+    } catch {
+        return url;
+    }
+}
+
+// Check if two URLs refer to the same video
+function isSameVideo(url1: string, url2: string): boolean {
+    return getNormalizedVideoUrl(url1) === getNormalizedVideoUrl(url2);
+}
+
 // Load recent sites from localStorage
 function loadRecentSites(): RecentSite[] {
     try {
@@ -56,9 +89,9 @@ function saveRecentSite(url: string, title: string, position?: number, duration?
 
     const sites = loadRecentSites();
 
-    // Find existing entry to preserve/update position
-    const existing = sites.find(s => s.url === url);
-    const filtered = sites.filter(s => s.url !== url);
+    // Find existing entry to preserve/update position (use video ID comparison)
+    const existing = sites.find(s => isSameVideo(s.url, url));
+    const filtered = sites.filter(s => !isSameVideo(s.url, url));
 
     // Add to front (most recent) with position data
     const newSite: RecentSite = {
@@ -78,7 +111,7 @@ function updateSitePosition(url: string, position: number, duration?: number): v
     if (!url || url.includes('google.com')) return;
 
     const sites = loadRecentSites();
-    const index = sites.findIndex(s => s.url === url);
+    const index = sites.findIndex(s => isSameVideo(s.url, url));
 
     if (index >= 0) {
         sites[index].lastPosition = position;
@@ -220,25 +253,62 @@ export function Sidebar({
         <div className="h-full flex flex-col pt-4 pb-2 font-sans bg-white">
             {/* Plugin List */}
             <div className="flex-1 px-2">
-                {/* Only show when not in welcome mode */}
-                {!showWelcome && (
+                {/* Header */}
+                <div className="flex items-center mb-5 px-2">
+                    <img src="/verboo.svg" alt="Verboo" className="h-[10px]" />
+                </div>
+
+                {/* Always visible - Learning & Library section */}
+                <div className="flex flex-col gap-1">
+                    <div
+                        onClick={onOpenEnglishLearning}
+                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isLearningActive
+                                ? 'bg-[#f4f4f5]'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <BookOpen size={14} className={isLearningActive ? 'text-[#18181b]' : 'text-gray-400'} />
+                        <span className={`text-[13px] font-medium ${isLearningActive ? 'text-[#18181b]' : 'text-gray-500'}`}>英语学习</span>
+                    </div>
+
+                    <div
+                        onClick={onOpenAssetPanel}
+                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isAssetActive
+                                ? 'bg-[#f4f4f5]'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <Package size={14} className={isAssetActive ? 'text-[#18181b]' : 'text-gray-400'} />
+                        <span className={`text-[13px] font-medium ${isAssetActive ? 'text-[#18181b]' : 'text-gray-500'}`}>素材库</span>
+                    </div>
+
+                    <div
+                        onClick={onOpenSubtitleLibrary}
+                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isSubtitleActive
+                                ? 'bg-[#f4f4f5]'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <Subtitles size={14} className={isSubtitleActive ? 'text-[#18181b]' : 'text-gray-400'} />
+                        <span className={`text-[13px] font-medium ${isSubtitleActive ? 'text-[#18181b]' : 'text-gray-500'}`}>字幕库</span>
+                    </div>
+                </div>
+
+                {/* Video-related controls - Only show when browser has loaded a valid page */}
+                {!showWelcome && currentUrl && !currentUrl.startsWith('about:') && (
                     <>
-                        {/* Header */}
-                        <div className="flex items-center gap-2.5 mb-5 px-2">
-                            <div className="w-[18px] h-[18px] bg-[#18181b] rounded-[5px]"></div>
-                            <span className="font-semibold text-[13px] text-[#18181b] tracking-[-0.01em]">Plugins</span>
-                        </div>
+                        <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
 
                         <div
                             onClick={onOpenSubtitleDialog}
-                            className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                            className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
                         >
+                            <Download size={14} className="text-gray-500" />
                             <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
-                            <span className="text-[11px] text-[#a1a1aa] mt-0.5">自动获取或手动导入</span>
                         </div>
-
-                        {/* Video Capture Section */}
-                        <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
 
                         <div
                             onClick={() => onCaptureScreenshot('none')}
@@ -272,49 +342,8 @@ export function Sidebar({
                             </div>
                             <span className="text-[10px] text-[#a1a1aa] font-mono">⌘D</span>
                         </div>
-
-                        <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
                     </>
                 )}
-
-                {/* Always visible */}
-                <div className="flex flex-col gap-1">
-                    <div
-                        onClick={onOpenEnglishLearning}
-                        className={`group flex flex-col px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isLearningActive
-                                ? 'bg-[#18181b] text-white'
-                                : 'hover:bg-[#f4f4f5]'
-                        }`}
-                    >
-                        <span className={`text-[13px] font-medium ${isLearningActive ? 'text-white' : 'text-[#18181b]'}`}>英语学习</span>
-                        <span className={`text-[11px] mt-0.5 ${isLearningActive ? 'text-gray-300' : 'text-[#a1a1aa]'}`}>分析字幕中的重点难点词汇</span>
-                    </div>
-
-                    <div
-                        onClick={onOpenAssetPanel}
-                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isAssetActive
-                                ? 'bg-[#18181b]'
-                                : 'hover:bg-[#f4f4f5]'
-                        }`}
-                    >
-                        <Package size={14} className={isAssetActive ? 'text-white' : 'text-gray-500'} />
-                        <span className={`text-[13px] font-medium ${isAssetActive ? 'text-white' : 'text-[#18181b]'}`}>素材库</span>
-                    </div>
-
-                    <div
-                        onClick={onOpenSubtitleLibrary}
-                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
-                            isSubtitleActive
-                                ? 'bg-[#18181b]'
-                                : 'hover:bg-[#f4f4f5]'
-                        }`}
-                    >
-                        <Subtitles size={14} className={isSubtitleActive ? 'text-white' : 'text-gray-500'} />
-                        <span className={`text-[13px] font-medium ${isSubtitleActive ? 'text-white' : 'text-[#18181b]'}`}>字幕库</span>
-                    </div>
-                </div>
             </div>
 
             {/* Recent Sites */}
