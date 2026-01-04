@@ -20,7 +20,7 @@ const LOCALE_STORAGE_KEY = 'verboo-locale';
 
 const locales: Record<Locale, LocaleData> = {
   zh: zhLocale,
-  en: enLocale,
+  en: enLocale as LocaleData,
 };
 
 // ============ Context ============

@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CHROME_USER_AGENT = void 0;
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
+const i18n_1 = require("./i18n");
 // 自动更新 (仅在生产环境启用)
 let updaterInitialized = false;
 async function initUpdaterIfNeeded(win) {
@@ -180,7 +181,7 @@ function setupViewEventHandlers(tabId, view) {
         const menu = new electron_1.Menu();
         if (canCapture) {
             menu.append(new electron_1.MenuItem({
-                label: '📥 保存素材',
+                label: (0, i18n_1.t)('contextMenu.saveAsset'),
                 click: () => {
                     webContents.send('execute-capture');
                 }
@@ -188,7 +189,7 @@ function setupViewEventHandlers(tabId, view) {
             menu.append(new electron_1.MenuItem({ type: 'separator' }));
         }
         menu.append(new electron_1.MenuItem({
-            label: '在新标签页中打开链接',
+            label: (0, i18n_1.t)('contextMenu.openInNewTab'),
             enabled: false,
         }));
         if (mainWindow) {
@@ -322,6 +323,8 @@ electron_1.app.whenReady().then(() => {
         const iconPath = path_1.default.join(__dirname, '../resources/icon.png');
         electron_1.app.dock.setIcon(iconPath);
     }
+    // Load saved locale
+    (0, i18n_1.loadLocaleFromStorage)();
     // Initialize databases
     (0, database_1.initDatabase)();
     (0, database_1.initVocabDatabase)();
@@ -340,6 +343,18 @@ electron_1.app.whenReady().then(() => {
  */
 function setupIpcHandlers() {
     console.log('[Main] Setting up IPC handlers...');
+    // ============ Locale IPC Handler ============
+    electron_1.ipcMain.handle('set-locale', async (event, locale) => {
+        try {
+            (0, i18n_1.setLocale)(locale);
+            (0, i18n_1.saveLocaleToStorage)(locale);
+            return { success: true };
+        }
+        catch (error) {
+            console.error('[IPC] set-locale failed:', error);
+            return { success: false, error: error.message };
+        }
+    });
     // ============ WebContentsView IPC Handlers ============
     // Create a new WebContentsView for a tab
     electron_1.ipcMain.handle('wcv-create', async (event, tabId, url, initialVisible = true) => {

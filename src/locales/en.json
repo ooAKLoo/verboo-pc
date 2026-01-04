@@ -48,8 +48,14 @@
     "browse": "Browse",
     "assets": "Library",
     "subtitles": "Subtitles",
-    "learning": "Learn",
-    "settings": "Settings"
+    "learning": "Learn English",
+    "settings": "Settings",
+    "getSubtitles": "Get Subtitles",
+    "screenshot": "Screenshot",
+    "important": "Important",
+    "difficult": "Challenging",
+    "lastWatchedAt": "Last",
+    "enterUrl": "Enter URL..."
   },
   "welcome": {
     "greeting": "Start Exploring",

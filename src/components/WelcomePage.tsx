@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { useTranslation } from '../contexts/I18nContext';
 
 // Recent sites stored in localStorage (shared with Sidebar)
 interface RecentSite {
@@ -47,6 +48,7 @@ interface WelcomePageProps {
 }
 
 export function WelcomePage({ onNavigate, isExiting }: WelcomePageProps) {
+    const { t } = useTranslation();
     const [inputUrl, setInputUrl] = useState('');
     const [isFocused, setIsFocused] = useState(false);
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
@@ -124,7 +126,7 @@ export function WelcomePage({ onNavigate, isExiting }: WelcomePageProps) {
                                 onChange={(e) => setInputUrl(e.target.value)}
                                 onFocus={() => setIsFocused(true)}
                                 onBlur={() => setIsFocused(false)}
-                                placeholder="Search or enter URL"
+                                placeholder={t('welcome.placeholder')}
                                 className="
                                     w-full py-4 px-5 pr-14
                                     text-[15px] text-zinc-800 font-medium

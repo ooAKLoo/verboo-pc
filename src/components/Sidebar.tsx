@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, Loader2, Camera, Star, AlertTriangle, Package, Subtitles, BookOpen, Download } from 'lucide-react';
 import { useApp } from '../contexts';
+import { useTranslation } from '../contexts/I18nContext';
 
 // Mark types for video captures
 export type MarkType = 'none' | 'important' | 'difficult';
@@ -118,6 +119,8 @@ export function Sidebar({
     onOpenSubtitleDialog,
     onCaptureScreenshot,
 }: SidebarProps) {
+    const { t } = useTranslation();
+
     // 从统一的 AppContext 获取状态和方法
     const {
         // 导航状态
@@ -214,7 +217,7 @@ export function Sidebar({
                         }`}
                     >
                         <BookOpen size={14} className={isLearningActive ? 'text-[#18181b]' : 'text-gray-400'} />
-                        <span className={`text-[13px] font-medium ${isLearningActive ? 'text-[#18181b]' : 'text-gray-500'}`}>英语学习</span>
+                        <span className={`text-[13px] font-medium ${isLearningActive ? 'text-[#18181b]' : 'text-gray-500'}`}>{t('sidebar.learning')}</span>
                     </div>
 
                     <div
@@ -224,7 +227,7 @@ export function Sidebar({
                         }`}
                     >
                         <Package size={14} className={isAssetActive ? 'text-[#18181b]' : 'text-gray-400'} />
-                        <span className={`text-[13px] font-medium ${isAssetActive ? 'text-[#18181b]' : 'text-gray-500'}`}>素材库</span>
+                        <span className={`text-[13px] font-medium ${isAssetActive ? 'text-[#18181b]' : 'text-gray-500'}`}>{t('sidebar.assets')}</span>
                     </div>
 
                     <div
@@ -234,7 +237,7 @@ export function Sidebar({
                         }`}
                     >
                         <Subtitles size={14} className={isSubtitleActive ? 'text-[#18181b]' : 'text-gray-400'} />
-                        <span className={`text-[13px] font-medium ${isSubtitleActive ? 'text-[#18181b]' : 'text-gray-500'}`}>字幕库</span>
+                        <span className={`text-[13px] font-medium ${isSubtitleActive ? 'text-[#18181b]' : 'text-gray-500'}`}>{t('sidebar.subtitles')}</span>
                     </div>
                 </div>
 
@@ -248,7 +251,7 @@ export function Sidebar({
                             className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
                         >
                             <Download size={14} className="text-gray-500" />
-                            <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
+                            <span className="text-[13px] font-medium text-[#18181b]">{t('sidebar.getSubtitles')}</span>
                         </div>
 
                         <div
@@ -257,7 +260,7 @@ export function Sidebar({
                         >
                             <div className="flex items-center gap-2">
                                 <Camera size={14} className="text-gray-500" />
-                                <span className="text-[13px] font-medium text-[#18181b]">截图</span>
+                                <span className="text-[13px] font-medium text-[#18181b]">{t('sidebar.screenshot')}</span>
                             </div>
                             <span className="text-[10px] text-[#a1a1aa] font-mono">⌘S</span>
                         </div>
@@ -268,7 +271,7 @@ export function Sidebar({
                         >
                             <div className="flex items-center gap-2">
                                 <Star size={14} className="text-amber-500" />
-                                <span className="text-[13px] font-medium text-[#18181b]">重点</span>
+                                <span className="text-[13px] font-medium text-[#18181b]">{t('sidebar.important')}</span>
                             </div>
                             <span className="text-[10px] text-[#a1a1aa] font-mono">⌘I</span>
                         </div>
@@ -279,7 +282,7 @@ export function Sidebar({
                         >
                             <div className="flex items-center gap-2">
                                 <AlertTriangle size={14} className="text-red-500" />
-                                <span className="text-[13px] font-medium text-[#18181b]">难点</span>
+                                <span className="text-[13px] font-medium text-[#18181b]">{t('sidebar.difficult')}</span>
                             </div>
                             <span className="text-[10px] text-[#a1a1aa] font-mono">⌘D</span>
                         </div>
@@ -296,7 +299,7 @@ export function Sidebar({
                                 key={index}
                                 onClick={() => navigateToUrl(site.url, site.lastPosition)}
                                 className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left"
-                                title={`${site.url}${site.lastPosition ? ` - 上次观看到 ${formatPosition(site.lastPosition)}` : ''}`}
+                                title={`${site.url}${site.lastPosition ? ` - ${t('sidebar.lastWatchedAt')} ${formatPosition(site.lastPosition)}` : ''}`}
                             >
                                 <img
                                     src={getFaviconUrl(site.url) || '/icon.svg'}
@@ -310,7 +313,7 @@ export function Sidebar({
                                     </div>
                                     {site.lastPosition && site.lastPosition > 0 && (
                                         <div className="text-[10px] text-gray-400 mt-0.5">
-                                            上次 {formatPosition(site.lastPosition)}
+                                            {t('sidebar.lastWatchedAt')} {formatPosition(site.lastPosition)}
                                             {site.duration ? ` / ${formatPosition(site.duration)}` : ''}
                                         </div>
                                     )}
@@ -350,7 +353,7 @@ export function Sidebar({
                             value={inputUrl}
                             onChange={(e) => setInputUrl(e.target.value)}
                             className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
-                            placeholder="Enter URL..."
+                            placeholder={t('sidebar.enterUrl')}
                         />
                     </form>
                 </div>
