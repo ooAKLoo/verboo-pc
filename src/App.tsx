@@ -207,30 +207,32 @@ function App() {
     browserRef.current?.reload();
   };
 
-  // Handle navigation from welcome page
-  const handleWelcomeNavigate = (url: string, seekTo?: number) => {
-    // Start exit animation
-    setIsWelcomeExiting(true);
+  // Animation duration constant
+  const WELCOME_EXIT_ANIMATION_MS = 500;
 
+  // Navigate to URL, handling welcome page exit if needed
+  const handleNavigateToUrl = useCallback((url: string, seekTo?: number) => {
     // Store seek position if provided
     if (seekTo && seekTo > 0) {
       pendingSeekRef.current = seekTo;
     }
 
-    // After animation, hide welcome and show browser
-    setTimeout(() => {
-      setShowWelcome(false);
-      setIsWelcomeExiting(false);
-      setLeftCollapsed(false);
-      setRightCollapsed(false);
-
-      // Show WebContentsView and navigate to the URL
-      ipcRenderer.invoke('wcv-show-active');
-      if (browserRef.current) {
-        browserRef.current.navigate(url);
-      }
-    }, 500); // Match the animation duration
-  };
+    if (showWelcome) {
+      // Exit welcome page with animation
+      setIsWelcomeExiting(true);
+      setTimeout(() => {
+        setShowWelcome(false);
+        setIsWelcomeExiting(false);
+        setLeftCollapsed(false);
+        setRightCollapsed(false);
+        ipcRenderer.invoke('wcv-show-active');
+        browserRef.current?.navigate(url);
+      }, WELCOME_EXIT_ANIMATION_MS);
+    } else {
+      // Direct navigation
+      browserRef.current?.navigate(url);
+    }
+  }, [showWelcome, ipcRenderer]);
 
   const handleRunPlugin = async (script: string) => {
     if (browserRef.current) {
@@ -507,15 +509,15 @@ function App() {
         const currentList = Array.isArray(prev) ? prev : [];
         return [...currentList, data];
       });
-      if (rightCollapsed) setRightCollapsed(false);
+      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
     }
     else if (data && data.type === 'transcript') {
       setSubtitleData(data.data);
-      if (rightCollapsed) setRightCollapsed(false);
+      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
     }
     else if (data && data.type === 'material-saved') {
       setMaterialRefreshTrigger(prev => prev + 1);
-      if (rightCollapsed) setRightCollapsed(false);
+      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
     }
     else if (data && data.type === 'bilibili-ai-subtitle') {
       console.log('[App] Received Bilibili AI subtitle:', data.count, 'items');
@@ -526,9 +528,9 @@ function App() {
     }
     else if (data) {
       setSubtitleData(data);
-      if (rightCollapsed) setRightCollapsed(false);
+      if (rightCollapsed && !showWelcome) setRightCollapsed(false);
     }
-  }, [rightCollapsed]);
+  }, [rightCollapsed, showWelcome]);
 
   return (
     <div className="w-full h-full font-sans antialiased text-primary bg-background selection:bg-accent/20">
@@ -611,28 +613,30 @@ function App() {
           </button>
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <button
-            onClick={() => {
-              if (learningMode) {
-                setLearningMode(false);
-                ipcRenderer.invoke('wcv-show-active');
-              } else if (assetMode) {
-                setAssetMode(false);
-                ipcRenderer.invoke('wcv-show-active');
-              } else if (subtitleMode) {
-                setSubtitleMode(false);
-                ipcRenderer.invoke('wcv-show-active');
-              } else {
-                setRightCollapsed(!rightCollapsed);
-              }
-            }}
-            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
-          >
-            <PanelRight size={16} className={(rightCollapsed && !learningMode && !assetMode && !subtitleMode) ? "opacity-50" : "opacity-100"} />
-          </button>
-        </div>
+        {/* Right side - Only show when not in welcome mode */}
+        {!showWelcome && (
+          <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <button
+              onClick={() => {
+                if (learningMode) {
+                  setLearningMode(false);
+                  ipcRenderer.invoke('wcv-show-active');
+                } else if (assetMode) {
+                  setAssetMode(false);
+                  ipcRenderer.invoke('wcv-show-active');
+                } else if (subtitleMode) {
+                  setSubtitleMode(false);
+                  ipcRenderer.invoke('wcv-show-active');
+                } else {
+                  setRightCollapsed(!rightCollapsed);
+                }
+              }}
+              className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all duration-200"
+            >
+              <PanelRight size={16} className={(rightCollapsed && !learningMode && !assetMode && !subtitleMode) ? "opacity-50" : "opacity-100"} />
+            </button>
+          </div>
+        )}
       </div>
 
       <Layout
@@ -670,12 +674,7 @@ function App() {
             inputUrl={navState.inputUrl}
             onInputUrlChange={handleInputUrlChange}
             onNavigate={handleNavigate}
-            onNavigateToUrl={(url, seekTo) => {
-              if (seekTo && seekTo > 0) {
-                pendingSeekRef.current = seekTo;
-              }
-              browserRef.current?.navigate(url);
-            }}
+            onNavigateToUrl={handleNavigateToUrl}
             isLoading={navState.isLoading}
             canGoBack={navState.canGoBack}
             canGoForward={navState.canGoForward}
@@ -687,6 +686,9 @@ function App() {
             currentVideoTime={currentVideoTime}
             videoDuration={videoDuration}
             showWelcome={showWelcome}
+            isLearningActive={learningMode}
+            isAssetActive={assetMode}
+            isSubtitleActive={subtitleMode}
           />
         }
         main={
@@ -694,7 +696,7 @@ function App() {
             <div className="flex-1 relative">
               {showWelcome && (
                 <WelcomePage
-                  onNavigate={handleWelcomeNavigate}
+                  onNavigate={handleNavigateToUrl}
                   isExiting={isWelcomeExiting}
                 />
               )}

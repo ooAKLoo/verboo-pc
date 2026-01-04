@@ -124,6 +124,10 @@ interface SidebarProps {
     videoDuration?: number;
     // WelcomePage state
     showWelcome?: boolean;
+    // Active panel states
+    isLearningActive?: boolean;
+    isAssetActive?: boolean;
+    isSubtitleActive?: boolean;
 }
 
 export function Sidebar({
@@ -147,7 +151,10 @@ export function Sidebar({
     pageTitle,
     currentVideoTime,
     videoDuration,
-    showWelcome = false
+    showWelcome = false,
+    isLearningActive = false,
+    isAssetActive = false,
+    isSubtitleActive = false
 }: SidebarProps) {
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
 
@@ -211,82 +218,102 @@ export function Sidebar({
 
     return (
         <div className="h-full flex flex-col pt-4 pb-2 font-sans bg-white">
-            {/* Header */}
-            <div className="flex items-center gap-2.5 mb-5 px-4">
-                <div className="w-[18px] h-[18px] bg-[#18181b] rounded-[5px]"></div>
-                <span className="font-semibold text-[13px] text-[#18181b] tracking-[-0.01em]">Plugins</span>
-            </div>
-
             {/* Plugin List */}
             <div className="flex-1 px-2">
-                <div
-                    onClick={onOpenSubtitleDialog}
-                    className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
-                >
-                    <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
-                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">自动获取或手动导入</span>
-                </div>
+                {/* Only show when not in welcome mode */}
+                {!showWelcome && (
+                    <>
+                        {/* Header */}
+                        <div className="flex items-center gap-2.5 mb-5 px-2">
+                            <div className="w-[18px] h-[18px] bg-[#18181b] rounded-[5px]"></div>
+                            <span className="font-semibold text-[13px] text-[#18181b] tracking-[-0.01em]">Plugins</span>
+                        </div>
 
-                {/* Video Capture Section */}
-                <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
+                        <div
+                            onClick={onOpenSubtitleDialog}
+                            className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                        >
+                            <span className="text-[13px] font-medium text-[#18181b]">获取字幕</span>
+                            <span className="text-[11px] text-[#a1a1aa] mt-0.5">自动获取或手动导入</span>
+                        </div>
 
-                <div
-                    onClick={() => onCaptureScreenshot('none')}
-                    className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
-                >
-                    <div className="flex items-center gap-2">
-                        <Camera size={14} className="text-gray-500" />
-                        <span className="text-[13px] font-medium text-[#18181b]">截图</span>
+                        {/* Video Capture Section */}
+                        <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
+
+                        <div
+                            onClick={() => onCaptureScreenshot('none')}
+                            className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Camera size={14} className="text-gray-500" />
+                                <span className="text-[13px] font-medium text-[#18181b]">截图</span>
+                            </div>
+                            <span className="text-[10px] text-[#a1a1aa] font-mono">⌘S</span>
+                        </div>
+
+                        <div
+                            onClick={() => onCaptureScreenshot('important')}
+                            className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-amber-50 cursor-pointer transition-colors duration-150"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Star size={14} className="text-amber-500" />
+                                <span className="text-[13px] font-medium text-[#18181b]">重点</span>
+                            </div>
+                            <span className="text-[10px] text-[#a1a1aa] font-mono">⌘I</span>
+                        </div>
+
+                        <div
+                            onClick={() => onCaptureScreenshot('difficult')}
+                            className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-red-50 cursor-pointer transition-colors duration-150"
+                        >
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle size={14} className="text-red-500" />
+                                <span className="text-[13px] font-medium text-[#18181b]">难点</span>
+                            </div>
+                            <span className="text-[10px] text-[#a1a1aa] font-mono">⌘D</span>
+                        </div>
+
+                        <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
+                    </>
+                )}
+
+                {/* Always visible */}
+                <div className="flex flex-col gap-1">
+                    <div
+                        onClick={onOpenEnglishLearning}
+                        className={`group flex flex-col px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isLearningActive
+                                ? 'bg-[#18181b] text-white'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <span className={`text-[13px] font-medium ${isLearningActive ? 'text-white' : 'text-[#18181b]'}`}>英语学习</span>
+                        <span className={`text-[11px] mt-0.5 ${isLearningActive ? 'text-gray-300' : 'text-[#a1a1aa]'}`}>分析字幕中的重点难点词汇</span>
                     </div>
-                    <span className="text-[10px] text-[#a1a1aa] font-mono">⌘S</span>
-                </div>
 
-                <div
-                    onClick={() => onCaptureScreenshot('important')}
-                    className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-amber-50 cursor-pointer transition-colors duration-150"
-                >
-                    <div className="flex items-center gap-2">
-                        <Star size={14} className="text-amber-500" />
-                        <span className="text-[13px] font-medium text-[#18181b]">重点</span>
+                    <div
+                        onClick={onOpenAssetPanel}
+                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isAssetActive
+                                ? 'bg-[#18181b]'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <Package size={14} className={isAssetActive ? 'text-white' : 'text-gray-500'} />
+                        <span className={`text-[13px] font-medium ${isAssetActive ? 'text-white' : 'text-[#18181b]'}`}>素材库</span>
                     </div>
-                    <span className="text-[10px] text-[#a1a1aa] font-mono">⌘I</span>
-                </div>
 
-                <div
-                    onClick={() => onCaptureScreenshot('difficult')}
-                    className="group flex items-center justify-between px-3 py-2 rounded-lg hover:bg-red-50 cursor-pointer transition-colors duration-150"
-                >
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle size={14} className="text-red-500" />
-                        <span className="text-[13px] font-medium text-[#18181b]">难点</span>
+                    <div
+                        onClick={onOpenSubtitleLibrary}
+                        className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
+                            isSubtitleActive
+                                ? 'bg-[#18181b]'
+                                : 'hover:bg-[#f4f4f5]'
+                        }`}
+                    >
+                        <Subtitles size={14} className={isSubtitleActive ? 'text-white' : 'text-gray-500'} />
+                        <span className={`text-[13px] font-medium ${isSubtitleActive ? 'text-white' : 'text-[#18181b]'}`}>字幕库</span>
                     </div>
-                    <span className="text-[10px] text-[#a1a1aa] font-mono">⌘D</span>
-                </div>
-
-                <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
-
-                <div
-                    onClick={onOpenEnglishLearning}
-                    className="group flex flex-col px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
-                >
-                    <span className="text-[13px] font-medium text-[#18181b]">英语学习</span>
-                    <span className="text-[11px] text-[#a1a1aa] mt-0.5">分析字幕中的重点难点词汇</span>
-                </div>
-
-                <div
-                    onClick={onOpenAssetPanel}
-                    className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
-                >
-                    <Package size={14} className="text-gray-500" />
-                    <span className="text-[13px] font-medium text-[#18181b]">素材库</span>
-                </div>
-
-                <div
-                    onClick={onOpenSubtitleLibrary}
-                    className="group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[#f4f4f5] cursor-pointer transition-colors duration-150"
-                >
-                    <Subtitles size={14} className="text-gray-500" />
-                    <span className="text-[13px] font-medium text-[#18181b]">字幕库</span>
                 </div>
             </div>
 

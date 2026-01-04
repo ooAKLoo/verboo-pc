@@ -139,7 +139,7 @@ function VideoSelector({
 }: {
     records: SubtitleRecord[];
     selectedId: number | null;
-    onChange: (id: number | null) => void;
+    onChange: (id: number) => void;
 }) {
     const getPlatformName = (platform: string) => {
         switch (platform) {
@@ -154,81 +154,48 @@ function VideoSelector({
         <div className="p-2 min-w-[280px] max-h-[400px] overflow-y-auto">
             <div className="text-xs font-medium text-zinc-500 px-2 mb-2">选择视频</div>
             <div className="space-y-0.5">
-                {/* All subtitles option */}
-                <button
-                    onClick={() => onChange(null)}
-                    className={`
-                        w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left
-                        transition-all duration-150
-                        ${selectedId === null
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'hover:bg-zinc-50 text-zinc-700'
-                        }
-                    `}
-                >
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center flex-shrink-0">
-                        <Subtitles size={14} className="text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">全部字幕</div>
-                        <div className="text-xs text-zinc-400">查看所有视频字幕</div>
-                    </div>
-                    {selectedId === null && (
-                        <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-none">
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                        </div>
-                    )}
-                </button>
-
-                {records.length > 0 && (
-                    <>
-                        <div className="text-xs font-medium text-zinc-500 px-2 mt-3 mb-2">视频列表</div>
-                        {records.map(record => {
-                            const isSelected = selectedId === record.id;
-                            return (
-                                <button
-                                    key={record.id}
-                                    onClick={() => onChange(record.id)}
-                                    className={`
-                                        w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left
-                                        transition-all duration-150
-                                        ${isSelected
-                                            ? 'bg-blue-50 text-blue-700'
-                                            : 'hover:bg-zinc-50 text-zinc-700'
-                                        }
-                                    `}
-                                >
-                                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                        <Video size={14} className="text-gray-500" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium truncate">
-                                            {record.videoTitle || '未命名视频'}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-xs text-zinc-400">
-                                                {getPlatformName(record.platform)}
-                                            </span>
-                                            <span className="text-xs text-zinc-300">·</span>
-                                            <span className="text-xs text-zinc-400">
-                                                {record.subtitleData.length} 条
-                                            </span>
-                                        </div>
-                                    </div>
-                                    {isSelected && (
-                                        <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-none">
-                                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </div>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </>
-                )}
+                {records.map(record => {
+                    const isSelected = selectedId === record.id;
+                    return (
+                        <button
+                            key={record.id}
+                            onClick={() => onChange(record.id)}
+                            className={`
+                                w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left
+                                transition-all duration-150
+                                ${isSelected
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'hover:bg-zinc-50 text-zinc-700'
+                                }
+                            `}
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <Video size={14} className="text-gray-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium truncate">
+                                    {record.videoTitle || '未命名视频'}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs text-zinc-400">
+                                        {getPlatformName(record.platform)}
+                                    </span>
+                                    <span className="text-xs text-zinc-300">·</span>
+                                    <span className="text-xs text-zinc-400">
+                                        {record.subtitleData.length} 条
+                                    </span>
+                                </div>
+                            </div>
+                            {isSelected && (
+                                <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center flex-none">
+                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
@@ -436,6 +403,10 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                 const response = await ipcRenderer.invoke('get-all-subtitles', { limit: 100 });
                 if (response.success) {
                     setSubtitleRecords(response.data);
+                    // 默认选中第一个视频
+                    if (response.data.length > 0 && !selectedRecordId) {
+                        setSelectedRecordId(response.data[0].id);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load subtitle records:', error);
@@ -449,12 +420,8 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
 
     // Get current subtitles based on selection
     const currentSubtitles = useMemo(() => {
-        if (selectedRecordId && selectedRecord) {
-            return selectedRecord.subtitleData;
-        }
-        // When "All subtitles" is selected, combine all subtitles
-        return subtitleRecords.flatMap(r => r.subtitleData);
-    }, [selectedRecordId, selectedRecord, subtitleRecords]);
+        return selectedRecord?.subtitleData || [];
+    }, [selectedRecord]);
 
     // Filter subtitles by search query
     const filteredSubtitles = useMemo(() => {
@@ -467,7 +434,7 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
     }, [currentSubtitles, searchQuery]);
 
     // Handle video selection change
-    const handleVideoSelect = (recordId: number | null) => {
+    const handleVideoSelect = (recordId: number) => {
         setSelectedRecordId(recordId);
         setActivePopover(null);
     };
@@ -498,10 +465,10 @@ export function SubtitleLibraryPanel({ onClose }: SubtitleLibraryPanelProps) {
                 <FilterPopover
                     trigger={
                         <FilterTrigger
-                            icon={selectedRecord ? <Video size={13} /> : <Subtitles size={13} />}
+                            icon={<Video size={13} />}
                             label={selectedRecord
-                                ? (selectedRecord.videoTitle?.slice(0, 10) + (selectedRecord.videoTitle && selectedRecord.videoTitle.length > 10 ? '...' : '')) || '视频'
-                                : '全部字幕'}
+                                ? (selectedRecord.videoTitle?.slice(0, 15) + (selectedRecord.videoTitle && selectedRecord.videoTitle.length > 15 ? '...' : '')) || '选择视频'
+                                : '选择视频'}
                             isActive={activePopover === 'video'}
                             hasSelection={!!selectedRecordId}
                             onClick={() => setActivePopover(activePopover === 'video' ? null : 'video')}

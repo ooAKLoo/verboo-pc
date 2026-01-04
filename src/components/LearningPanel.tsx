@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import * as HoverCard from '@radix-ui/react-hover-card';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { BookOpen, X, ArrowDownUp, ChevronDown, GraduationCap, Video, FileText, ChevronUp, ArrowUp, ArrowDown, Loader2, Download, FileDown, Printer } from 'lucide-react';
 
 // Word info from vocabulary database
@@ -602,99 +602,101 @@ ${pages.map((pageWords, pageIndex) => `
 </html>`;
 }
 
-/**
- * WordListItem - 单词列表项组件（Notion/Linear 风格）
- */
-function WordListItem({ word }: { word: DifficultWord }) {
-    const colors = difficultyColors[word.difficulty];
-    const info = word.info;
-
-    // Get vocabulary tags
-    const vocabTags: string[] = [];
-    if (info.isGk) vocabTags.push('高考');
-    if (info.isZk) vocabTags.push('中考');
-    if (info.isCet4) vocabTags.push('CET4');
-    if (info.isCet6) vocabTags.push('CET6');
-    if (info.isKy) vocabTags.push('考研');
-    if (info.isToefl) vocabTags.push('TOEFL');
-    if (info.isIelts) vocabTags.push('IELTS');
-    if (info.isGre) vocabTags.push('GRE');
-
-    return (
-        <HoverCard.Root openDelay={200} closeDelay={100}>
-            <HoverCard.Trigger asChild>
-                <div className="group table-row cursor-pointer hover:bg-zinc-50/50 transition-colors">
-                    {/* Word */}
-                    <div className="table-cell h-9 align-middle border-b border-zinc-100 pl-6 pr-3">
-                        <div className="flex items-center gap-2 w-[120px]">
-                            <div className={`w-1.5 h-1.5 rounded-full ${colors.dot} flex-shrink-0`} />
-                            <span className={`text-[13px] font-medium ${colors.text} truncate`}>
-                                {word.word}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Phonetic */}
-                    <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3">
-                        <span className="text-[12px] text-zinc-400 truncate block w-[100px]">
-                            {info.phonetic || '-'}
-                        </span>
-                    </div>
-
-                    {/* Definition */}
-                    <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3 max-w-0 w-full">
-                        <span className="text-[13px] text-zinc-600 truncate block">
-                            {info.definitionCn || info.definitionEn || '-'}
-                        </span>
-                    </div>
-
-                    {/* Tags */}
-                    <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                            {vocabTags.slice(0, 2).map(tag => (
-                                <span key={tag} className="px-1.5 py-0.5 text-[10px] bg-zinc-100 text-zinc-500 rounded flex-shrink-0">
-                                    {tag}
-                                </span>
-                            ))}
-                            {vocabTags.length > 2 && (
-                                <span className="text-[10px] text-zinc-400 flex-shrink-0">+{vocabTags.length - 2}</span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* COCA Rank */}
-                    <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-6 text-right whitespace-nowrap">
-                        <span className="text-[11px] text-zinc-400 tabular-nums">
-                            {info.cocaRank ? `#${info.cocaRank}` : '-'}
-                        </span>
-                    </div>
-                </div>
-            </HoverCard.Trigger>
-            <HoverCard.Portal>
-                <WordHoverContent word={word} />
-            </HoverCard.Portal>
-        </HoverCard.Root>
-    );
+// Hover card position state type
+interface HoverCardState {
+    word: DifficultWord;
+    x: number;
+    y: number;
 }
 
-// Difficulty level colors
-const difficultyColors = {
-    high: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500' },
-    medium: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', dot: 'bg-amber-500' },
-    low: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', dot: 'bg-blue-500' },
-};
+// Global hover card manager for debounced display
+function useWordHoverCard(delay: number = 400) {
+    const [hoverState, setHoverState] = useState<HoverCardState | null>(null);
+    const [isVisible, setIsVisible] = useState(false);
+    const showTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingWordRef = useRef<HoverCardState | null>(null);
 
-// Format time display
-const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${String(secs).padStart(2, '0')}`;
-};
+    const showCard = useCallback((word: DifficultWord, x: number, y: number) => {
+        // Clear any pending hide
+        if (hideTimerRef.current) {
+            clearTimeout(hideTimerRef.current);
+            hideTimerRef.current = null;
+        }
 
-// Word hover card content component
-function WordHoverContent({ word }: { word: DifficultWord }) {
-    const colors = difficultyColors[word.difficulty];
-    const info = word.info;
+        // Store pending word info
+        pendingWordRef.current = { word, x, y };
+
+        // If already showing the same word, just update position
+        if (isVisible && hoverState?.word.word === word.word) {
+            setHoverState({ word, x, y });
+            return;
+        }
+
+        // Clear existing show timer
+        if (showTimerRef.current) {
+            clearTimeout(showTimerRef.current);
+        }
+
+        // Debounce show
+        showTimerRef.current = setTimeout(() => {
+            if (pendingWordRef.current) {
+                setHoverState(pendingWordRef.current);
+                setIsVisible(true);
+            }
+        }, delay);
+    }, [delay, isVisible, hoverState]);
+
+    const hideCard = useCallback(() => {
+        // Clear show timer
+        if (showTimerRef.current) {
+            clearTimeout(showTimerRef.current);
+            showTimerRef.current = null;
+        }
+        pendingWordRef.current = null;
+
+        // Delay hide slightly for smoother UX
+        hideTimerRef.current = setTimeout(() => {
+            setIsVisible(false);
+            setHoverState(null);
+        }, 150);
+    }, []);
+
+    const cancelHide = useCallback(() => {
+        if (hideTimerRef.current) {
+            clearTimeout(hideTimerRef.current);
+            hideTimerRef.current = null;
+        }
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (showTimerRef.current) clearTimeout(showTimerRef.current);
+            if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        };
+    }, []);
+
+    return { hoverState, isVisible, showCard, hideCard, cancelHide };
+}
+
+// Context for hover card management
+const HoverCardContext = React.createContext<ReturnType<typeof useWordHoverCard> | null>(null);
+
+// Word hover card content component (positioned at mouse)
+function WordHoverCardPopup({
+    state,
+    onMouseEnter,
+    onMouseLeave
+}: {
+    state: HoverCardState;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+}) {
+    const colors = difficultyColors[state.word.difficulty];
+    const info = state.word.info;
+    const cardRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState({ x: state.x, y: state.y });
 
     // Get exam tags
     const examTags: string[] = [];
@@ -708,11 +710,43 @@ function WordHoverContent({ word }: { word: DifficultWord }) {
     if (info.isIelts) examTags.push('IELTS');
     if (info.isGre) examTags.push('GRE');
 
-    return (
-        <HoverCard.Content
-            className="w-[320px] bg-white rounded-xl border border-gray-200 overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
-            sideOffset={8}
-            align="start"
+    // Adjust position to stay within viewport
+    useEffect(() => {
+        if (!cardRef.current) return;
+
+        const card = cardRef.current;
+        const rect = card.getBoundingClientRect();
+        const padding = 12;
+
+        let newX = state.x + 12; // Offset from cursor
+        let newY = state.y + 16;
+
+        // Keep within viewport horizontally
+        if (newX + rect.width > window.innerWidth - padding) {
+            newX = state.x - rect.width - 12;
+        }
+        if (newX < padding) {
+            newX = padding;
+        }
+
+        // Keep within viewport vertically
+        if (newY + rect.height > window.innerHeight - padding) {
+            newY = state.y - rect.height - 8;
+        }
+        if (newY < padding) {
+            newY = padding;
+        }
+
+        setPosition({ x: newX, y: newY });
+    }, [state.x, state.y]);
+
+    return createPortal(
+        <div
+            ref={cardRef}
+            className="fixed z-[9999] w-[320px] bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            style={{ left: position.x, top: position.y }}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
         >
             {/* Header */}
             <div className={`px-4 py-3 ${colors.bg} border-b ${colors.border}`}>
@@ -772,29 +806,121 @@ function WordHoverContent({ word }: { word: DifficultWord }) {
                     </div>
                 )}
             </div>
-
-            <HoverCard.Arrow className="fill-white" />
-        </HoverCard.Content>
+        </div>,
+        document.body
     );
 }
 
-// Highlighted word with hover card
-function HighlightedWord({ word, children }: { word: DifficultWord; children: React.ReactNode }) {
+/**
+ * WordListItem - 单词列表项组件（Notion/Linear 风格）
+ */
+function WordListItem({ word }: { word: DifficultWord }) {
     const colors = difficultyColors[word.difficulty];
+    const info = word.info;
+
+    // Get vocabulary tags
+    const vocabTags: string[] = [];
+    if (info.isGk) vocabTags.push('高考');
+    if (info.isZk) vocabTags.push('中考');
+    if (info.isCet4) vocabTags.push('CET4');
+    if (info.isCet6) vocabTags.push('CET6');
+    if (info.isKy) vocabTags.push('考研');
+    if (info.isToefl) vocabTags.push('TOEFL');
+    if (info.isIelts) vocabTags.push('IELTS');
+    if (info.isGre) vocabTags.push('GRE');
 
     return (
-        <HoverCard.Root openDelay={200} closeDelay={100}>
-            <HoverCard.Trigger asChild>
-                <span
-                    className={`${colors.bg} ${colors.text} px-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity border-b-2 ${colors.border}`}
-                >
-                    {children}
+        <div className="group table-row hover:bg-zinc-50/50 transition-colors">
+            {/* Word */}
+            <div className="table-cell h-9 align-middle border-b border-zinc-100 pl-6 pr-3">
+                <div className="flex items-center gap-2 w-[120px]">
+                    <div className={`w-1.5 h-1.5 rounded-full ${colors.dot} flex-shrink-0`} />
+                    <span className={`text-[13px] font-medium ${colors.text} truncate`}>
+                        {word.word}
+                    </span>
+                </div>
+            </div>
+
+            {/* Phonetic */}
+            <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3">
+                <span className="text-[12px] text-zinc-400 truncate block w-[100px]">
+                    {info.phonetic || '-'}
                 </span>
-            </HoverCard.Trigger>
-            <HoverCard.Portal>
-                <WordHoverContent word={word} />
-            </HoverCard.Portal>
-        </HoverCard.Root>
+            </div>
+
+            {/* Definition */}
+            <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3 max-w-0 w-full">
+                <span className="text-[13px] text-zinc-600 truncate block">
+                    {info.definitionCn || info.definitionEn || '-'}
+                </span>
+            </div>
+
+            {/* Tags */}
+            <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-3 whitespace-nowrap">
+                <div className="flex items-center gap-1">
+                    {vocabTags.slice(0, 2).map(tag => (
+                        <span key={tag} className="px-1.5 py-0.5 text-[10px] bg-zinc-100 text-zinc-500 rounded flex-shrink-0">
+                            {tag}
+                        </span>
+                    ))}
+                    {vocabTags.length > 2 && (
+                        <span className="text-[10px] text-zinc-400 flex-shrink-0">+{vocabTags.length - 2}</span>
+                    )}
+                </div>
+            </div>
+
+            {/* COCA Rank */}
+            <div className="table-cell h-9 align-middle border-b border-zinc-100 pr-6 text-right whitespace-nowrap">
+                <span className="text-[11px] text-zinc-400 tabular-nums">
+                    {info.cocaRank ? `#${info.cocaRank}` : '-'}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// Difficulty level colors
+const difficultyColors = {
+    high: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500' },
+    medium: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', dot: 'bg-amber-500' },
+    low: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', dot: 'bg-blue-500' },
+};
+
+// Format time display
+const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+};
+
+// Highlighted word with hover interaction
+function HighlightedWord({ word, children }: { word: DifficultWord; children: React.ReactNode }) {
+    const colors = difficultyColors[word.difficulty];
+    const hoverContext = React.useContext(HoverCardContext);
+
+    const handleMouseEnter = (e: React.MouseEvent) => {
+        hoverContext?.showCard(word, e.clientX, e.clientY);
+    };
+
+    const handleMouseLeave = () => {
+        hoverContext?.hideCard();
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (hoverContext?.isVisible && hoverContext?.hoverState?.word.word === word.word) {
+            hoverContext?.showCard(word, e.clientX, e.clientY);
+        }
+    };
+
+    return (
+        <span
+            className={`${colors.bg} ${colors.text} px-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity border-b-2 ${colors.border}`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseMove={handleMouseMove}
+        >
+            {children}
+        </span>
     );
 }
 
@@ -883,6 +1009,9 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
     const [showSubtitles, setShowSubtitles] = useState(false);
     const [dbStats, setDbStats] = useState<Record<string, number>>({});
     const [hasMore, setHasMore] = useState(true); // Whether there are more words to load
+
+    // Hover card management with 400ms debounce
+    const hoverCardManager = useWordHoverCard(400);
 
     // Filter states
     const [vocabCategory, setVocabCategory] = useState<VocabCategory>('all');
@@ -1110,8 +1239,9 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
     }, [filteredWords]);
 
     return (
-        <div className="h-full bg-white rounded-xl flex flex-col">
-            {/* Header */}
+        <HoverCardContext.Provider value={hoverCardManager}>
+            <div className="h-full bg-white rounded-xl flex flex-col">
+                {/* Header */}
             <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
                 <span className="text-sm font-medium text-zinc-700">英语学习</span>
                 <button
@@ -1343,7 +1473,17 @@ export function LearningPanel({ onClose }: LearningPanelProps) {
                     </>
                 )}
             </div>
-        </div>
+
+            {/* Render hover card when visible */}
+            {hoverCardManager.isVisible && hoverCardManager.hoverState && (
+                <WordHoverCardPopup
+                    state={hoverCardManager.hoverState}
+                    onMouseEnter={hoverCardManager.cancelHide}
+                    onMouseLeave={hoverCardManager.hideCard}
+                />
+            )}
+            </div>
+        </HoverCardContext.Provider>
     );
 }
 

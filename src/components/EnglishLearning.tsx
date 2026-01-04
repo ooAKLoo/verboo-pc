@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import * as HoverCard from '@radix-ui/react-hover-card';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { BookOpen, ChevronRight, ArrowLeft, Clock, Tag } from 'lucide-react';
 
 // Word info from vocabulary database
@@ -79,10 +79,98 @@ const getPlatformName = (platform: string) => {
     return platformMap[platform] || platform;
 };
 
-// Word hover card content component
-function WordHoverContent({ word }: { word: DifficultWord }) {
-    const colors = difficultyColors[word.difficulty];
-    const info = word.info;
+// Hover card position state type
+interface HoverCardState {
+    word: DifficultWord;
+    x: number;
+    y: number;
+}
+
+// Global hover card manager for debounced display
+function useWordHoverCard(delay: number = 400) {
+    const [hoverState, setHoverState] = useState<HoverCardState | null>(null);
+    const [isVisible, setIsVisible] = useState(false);
+    const showTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingWordRef = useRef<HoverCardState | null>(null);
+
+    const showCard = useCallback((word: DifficultWord, x: number, y: number) => {
+        // Clear any pending hide
+        if (hideTimerRef.current) {
+            clearTimeout(hideTimerRef.current);
+            hideTimerRef.current = null;
+        }
+
+        // Store pending word info
+        pendingWordRef.current = { word, x, y };
+
+        // If already showing the same word, just update position
+        if (isVisible && hoverState?.word.word === word.word) {
+            setHoverState({ word, x, y });
+            return;
+        }
+
+        // Clear existing show timer
+        if (showTimerRef.current) {
+            clearTimeout(showTimerRef.current);
+        }
+
+        // Debounce show
+        showTimerRef.current = setTimeout(() => {
+            if (pendingWordRef.current) {
+                setHoverState(pendingWordRef.current);
+                setIsVisible(true);
+            }
+        }, delay);
+    }, [delay, isVisible, hoverState]);
+
+    const hideCard = useCallback(() => {
+        // Clear show timer
+        if (showTimerRef.current) {
+            clearTimeout(showTimerRef.current);
+            showTimerRef.current = null;
+        }
+        pendingWordRef.current = null;
+
+        // Delay hide slightly for smoother UX
+        hideTimerRef.current = setTimeout(() => {
+            setIsVisible(false);
+            setHoverState(null);
+        }, 150);
+    }, []);
+
+    const cancelHide = useCallback(() => {
+        if (hideTimerRef.current) {
+            clearTimeout(hideTimerRef.current);
+            hideTimerRef.current = null;
+        }
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (showTimerRef.current) clearTimeout(showTimerRef.current);
+            if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        };
+    }, []);
+
+    return { hoverState, isVisible, showCard, hideCard, cancelHide };
+}
+
+// Word hover card content component (positioned at mouse)
+function WordHoverCard({
+    state,
+    onMouseEnter,
+    onMouseLeave
+}: {
+    state: HoverCardState;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+}) {
+    const colors = difficultyColors[state.word.difficulty];
+    const info = state.word.info;
+    const cardRef = useRef<HTMLDivElement>(null);
+    const [position, setPosition] = useState({ x: state.x, y: state.y });
 
     // Get exam tags
     const examTags: string[] = [];
@@ -96,11 +184,43 @@ function WordHoverContent({ word }: { word: DifficultWord }) {
     if (info.isIelts) examTags.push('IELTS');
     if (info.isGre) examTags.push('GRE');
 
-    return (
-        <HoverCard.Content
-            className="w-[320px] bg-white rounded-xl border border-gray-200 overflow-hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
-            sideOffset={8}
-            align="start"
+    // Adjust position to stay within viewport
+    useEffect(() => {
+        if (!cardRef.current) return;
+
+        const card = cardRef.current;
+        const rect = card.getBoundingClientRect();
+        const padding = 12;
+
+        let newX = state.x + 8; // Offset from cursor
+        let newY = state.y + 16;
+
+        // Keep within viewport horizontally
+        if (newX + rect.width > window.innerWidth - padding) {
+            newX = state.x - rect.width - 8;
+        }
+        if (newX < padding) {
+            newX = padding;
+        }
+
+        // Keep within viewport vertically
+        if (newY + rect.height > window.innerHeight - padding) {
+            newY = state.y - rect.height - 8;
+        }
+        if (newY < padding) {
+            newY = padding;
+        }
+
+        setPosition({ x: newX, y: newY });
+    }, [state.x, state.y]);
+
+    return createPortal(
+        <div
+            ref={cardRef}
+            className="fixed z-[9999] w-[320px] bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            style={{ left: position.x, top: position.y }}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
         >
             {/* Header */}
             <div className={`px-4 py-3 ${colors.bg} border-b ${colors.border}`}>
@@ -160,29 +280,43 @@ function WordHoverContent({ word }: { word: DifficultWord }) {
                     </div>
                 )}
             </div>
-
-            <HoverCard.Arrow className="fill-white" />
-        </HoverCard.Content>
+        </div>,
+        document.body
     );
 }
 
-// Highlighted word with hover card
+// Context for hover card management
+const HoverCardContext = React.createContext<ReturnType<typeof useWordHoverCard> | null>(null);
+
+// Highlighted word with hover interaction
 function HighlightedWord({ word, children }: { word: DifficultWord; children: React.ReactNode }) {
     const colors = difficultyColors[word.difficulty];
+    const hoverContext = React.useContext(HoverCardContext);
+
+    const handleMouseEnter = (e: React.MouseEvent) => {
+        hoverContext?.showCard(word, e.clientX, e.clientY);
+    };
+
+    const handleMouseLeave = () => {
+        hoverContext?.hideCard();
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        // Update position while hovering (for smoother tracking)
+        if (hoverContext?.isVisible) {
+            hoverContext?.showCard(word, e.clientX, e.clientY);
+        }
+    };
 
     return (
-        <HoverCard.Root openDelay={200} closeDelay={100}>
-            <HoverCard.Trigger asChild>
-                <span
-                    className={`${colors.bg} ${colors.text} px-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity border-b-2 ${colors.border}`}
-                >
-                    {children}
-                </span>
-            </HoverCard.Trigger>
-            <HoverCard.Portal>
-                <WordHoverContent word={word} />
-            </HoverCard.Portal>
-        </HoverCard.Root>
+        <span
+            className={`${colors.bg} ${colors.text} px-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity border-b-2 ${colors.border}`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseMove={handleMouseMove}
+        >
+            {children}
+        </span>
     );
 }
 
@@ -264,6 +398,9 @@ export function EnglishLearning({ onBack }: EnglishLearningProps) {
     const [difficultWords, setDifficultWords] = useState<Map<string, DifficultWord>>(new Map());
     const [loading, setLoading] = useState(true);
     const [analyzing, setAnalyzing] = useState(false);
+
+    // Hover card management with 400ms debounce
+    const hoverCardManager = useWordHoverCard(400);
 
     // Load all subtitle records
     useEffect(() => {
@@ -474,8 +611,19 @@ export function EnglishLearning({ onBack }: EnglishLearningProps) {
     };
 
     return (
-        <div className="h-full bg-white">
-            {viewMode === 'list' ? renderListView() : renderDetailView()}
-        </div>
+        <HoverCardContext.Provider value={hoverCardManager}>
+            <div className="h-full bg-white">
+                {viewMode === 'list' ? renderListView() : renderDetailView()}
+            </div>
+
+            {/* Render hover card when visible */}
+            {hoverCardManager.isVisible && hoverCardManager.hoverState && (
+                <WordHoverCard
+                    state={hoverCardManager.hoverState}
+                    onMouseEnter={hoverCardManager.cancelHide}
+                    onMouseLeave={hoverCardManager.hideCard}
+                />
+            )}
+        </HoverCardContext.Provider>
     );
 }
