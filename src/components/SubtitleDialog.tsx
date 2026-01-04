@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, Upload, ExternalLink, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { parseSubtitle, type SubtitleItem } from '../utils/subtitleParser';
+import { useTranslation } from '../contexts/I18nContext';
 
 interface SubtitleDialogProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function SubtitleDialog({
   onBilibiliFetch,
   currentUrl = ''
 }: SubtitleDialogProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('auto');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,11 +71,11 @@ export function SubtitleDialog({
       const subtitles = parseSubtitle(content, file.name);
 
       if (subtitles.length === 0) {
-        throw new Error('未能解析出有效的字幕内容');
+        throw new Error(t('subtitleDialog.parseError'));
       }
 
       onSubtitlesImport(subtitles);
-      setMessage({ type: 'success', text: `成功导入 ${subtitles.length} 条字幕` });
+      setMessage({ type: 'success', text: t('subtitleDialog.importSuccess').replace('{count}', String(subtitles.length)) });
 
       // 延迟关闭对话框
       setTimeout(() => {
