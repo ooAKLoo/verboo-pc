@@ -874,16 +874,11 @@ function setupIpcHandlers() {
     // Save base64 image to Downloads folder
     electron_1.ipcMain.handle('save-image-to-downloads', async (event, data) => {
         try {
-            console.log('[IPC] save-image-to-downloads called:', data.filename);
-            // Get Downloads folder path
             const downloadsPath = electron_1.app.getPath('downloads');
             const filePath = path_1.default.join(downloadsPath, data.filename);
-            // Extract base64 content (remove data:image/png;base64, prefix)
             const base64Content = data.base64Data.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Content, 'base64');
-            // Write file
             fs_1.default.writeFileSync(filePath, buffer);
-            console.log('[IPC] Image saved to:', filePath);
             return { success: true, filePath };
         }
         catch (error) {
@@ -891,7 +886,6 @@ function setupIpcHandlers() {
             return { success: false, error: error.message };
         }
     });
-    console.log('[Main] File Save IPC handlers registered successfully');
 }
 electron_1.app.on('window-all-closed', () => {
     (0, database_1.closeDatabase)();

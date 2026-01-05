@@ -353,9 +353,8 @@ function createWindow() {
 
     // Clean up views when window is closed
     win.on('closed', () => {
-        for (const tabId of webContentsViews.keys()) {
-            destroyWebContentsView(tabId);
-        }
+        // Just clear the map, views are already destroyed with the window
+        webContentsViews.clear();
         mainWindow = null;
     });
 }
