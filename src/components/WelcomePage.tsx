@@ -48,18 +48,25 @@ interface WelcomePageProps {
 }
 
 export function WelcomePage({ onNavigate, isExiting }: WelcomePageProps) {
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
     const [inputUrl, setInputUrl] = useState('');
     const [isFocused, setIsFocused] = useState(false);
     const [recentSites, setRecentSites] = useState<RecentSite[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // 调试日志
+    console.log('[WelcomePage] Render - locale:', locale, 'isExiting:', isExiting);
+
     useEffect(() => {
+        console.log('[WelcomePage] Mount effect');
         setRecentSites(loadRecentSites());
         const timer = setTimeout(() => {
             inputRef.current?.focus();
         }, 400);
-        return () => clearTimeout(timer);
+        return () => {
+            console.log('[WelcomePage] Cleanup');
+            clearTimeout(timer);
+        };
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {

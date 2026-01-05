@@ -68,7 +68,7 @@
   },
   "welcome": {
     "greeting": "Start Exploring",
-    "placeholder": "Enter a URL or search",
+    "placeholder": "Paste video URL",
     "quickAccess": "Quick Access",
     "recentVideos": "Recent Videos",
     "noRecentVideos": "No recent videos yet"

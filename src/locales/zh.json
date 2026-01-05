@@ -68,7 +68,7 @@
   },
   "welcome": {
     "greeting": "开始探索",
-    "placeholder": "输入网址或搜索内容",
+    "placeholder": "粘贴视频链接",
     "quickAccess": "快速访问",
     "recentVideos": "最近视频",
     "noRecentVideos": "暂无最近观看的视频"

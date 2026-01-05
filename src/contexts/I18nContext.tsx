@@ -61,6 +61,9 @@ interface I18nProviderProps {
 }
 
 export function I18nProvider({ children }: I18nProviderProps) {
+  // 在顶层获取 ipcRenderer，避免在回调中动态获取
+  const ipcRenderer = (window as any).require?.('electron')?.ipcRenderer;
+
   const [locale, setLocaleState] = useState<Locale>(() => {
     // Read from localStorage on init
     if (typeof window !== 'undefined') {
@@ -78,11 +81,13 @@ export function I18nProvider({ children }: I18nProviderProps) {
   }, [locale]);
 
   const setLocale = useCallback((newLocale: Locale) => {
+    console.log('[I18n] setLocale called:', newLocale);
     setLocaleState(newLocale);
     // Notify main process for context menu updates
-    const { ipcRenderer } = window.require('electron');
-    ipcRenderer.invoke('set-locale', newLocale).catch(console.error);
-  }, []);
+    if (ipcRenderer) {
+      ipcRenderer.invoke('set-locale', newLocale).catch(console.error);
+    }
+  }, [ipcRenderer]);
 
   const t = useCallback((key: string): string => {
     return getNestedValue(locales[locale] as Record<string, unknown>, key);

@@ -95,14 +95,20 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
   // 判断是否曾经导航过：有有效的 currentUrl
   const hasNavigated = Boolean(currentUrl && currentUrl !== 'about:blank');
 
-  // -------- WCV 可见性管理（统一在这里） --------
+  // -------- WCV 可见性管理（仅在 browser 模式下操作） --------
   useEffect(() => {
+    // 只有在 browser 模式下才需要管理 WCV 可见性
+    // welcome 模式下不应该触发任何 WCV 操作
     if (viewMode === 'browser') {
+      console.log('[AppContext] Show WCV - viewMode:', viewMode);
       ipcRenderer.invoke('wcv-show-active');
-    } else {
+    } else if (viewMode !== 'welcome') {
+      // 非 welcome 模式（learning/asset/subtitle）才隐藏 WCV
+      console.log('[AppContext] Hide WCV - viewMode:', viewMode);
       ipcRenderer.invoke('wcv-hide-all');
     }
-  }, [viewMode, ipcRenderer]);
+    // welcome 模式下不做任何 WCV 操作
+  }, [viewMode]); // 移除 ipcRenderer 依赖，避免不必要的重新执行
 
   // -------- 视图操作 --------
   const toggleLeftPanel = useCallback(() => {

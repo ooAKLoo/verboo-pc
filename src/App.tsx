@@ -61,6 +61,9 @@ function AppContent() {
     pauseVideo,
   } = useApp();
 
+  // 调试日志
+  console.log('[AppContent] Render - viewMode:', viewMode, 'isWelcomeExiting:', isWelcomeExiting);
+
   // -------- 初始化分析服务 --------
   useEffect(() => {
     analytics.init();
@@ -341,7 +344,13 @@ function AppContent() {
 
       {toast && <Toast key={toast.id} message={toast.message} type={toast.type} position={toast.position} onClose={hideToast} />}
 
-      <SettingsPanel isOpen={isSettingsOpen} onClose={() => { setIsSettingsOpen(false); ipcRenderer.invoke('wcv-show-active'); }} />
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => {
+        setIsSettingsOpen(false);
+        // 只在 browser 模式下恢复 WCV 可见性
+        if (viewMode === 'browser') {
+          ipcRenderer.invoke('wcv-show-active');
+        }
+      }} />
 
       {/* AI字幕提示 */}
       {pendingAISubtitle && (
