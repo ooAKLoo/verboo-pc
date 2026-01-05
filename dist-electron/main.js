@@ -364,10 +364,26 @@ function createWindow() {
         // 生产环境初始化自动更新
         initUpdaterIfNeeded(win);
     }
-    // Clean up views when window is closed
-    win.on('closed', () => {
-        // Just clear the map, views are already destroyed with the window
+    // Clean up views before window closes - stop media playback
+    win.on('close', () => {
+        // Destroy all WebContentsViews to stop media playback
+        for (const [tabId, view] of webContentsViews) {
+            try {
+                // Remove from window first
+                if (mainWindow) {
+                    mainWindow.contentView.removeChildView(view);
+                }
+                // Close the webContents to stop media
+                view.webContents.close();
+            }
+            catch (e) {
+                console.error('[Main] Error destroying view:', tabId, e);
+            }
+        }
         webContentsViews.clear();
+    });
+    // Clean up reference when window is closed
+    win.on('closed', () => {
         mainWindow = null;
     });
 }
