@@ -264,14 +264,14 @@ function ScreenshotDetailView({
     const [saveMessage, setSaveMessage] = useState<string | null>(null);
     const [loadingSubtitles, setLoadingSubtitles] = useState(true);
 
-    // 显示模式状态
-    const [displayMode, setDisplayMode] = useState<DisplayMode>('overlay');
-    const [stitchSeparator, setStitchSeparator] = useState<SeparatorStyle>('white');
-    const [stitchSeparatorWidth, setStitchSeparatorWidth] = useState(1);
-    const [stitchCropRatio, setStitchCropRatio] = useState(0.10); // 裁剪比例 0%-80%
+    // 显示模式状态 - 从已保存的数据中恢复
+    const [displayMode, setDisplayMode] = useState<DisplayMode>(screenshotData.displayMode || 'overlay');
+    const [stitchSeparator, setStitchSeparator] = useState<SeparatorStyle>(screenshotData.stitchSeparator || 'white');
+    const [stitchSeparatorWidth, setStitchSeparatorWidth] = useState(screenshotData.stitchSeparatorWidth ?? 1);
+    const [stitchCropRatio, setStitchCropRatio] = useState(screenshotData.stitchCropRatio ?? 0.10); // 裁剪比例 0%-80%
 
     // 卡片模式选项（时间戳默认显示）
-    const [cardShowTimestamp, setCardShowTimestamp] = useState(true);
+    const [cardShowTimestamp, setCardShowTimestamp] = useState(screenshotData.cardShowTimestamp ?? true);
 
     // 创建渲染器实例
     const rendererRef = useRef<ScreenshotRenderer | null>(null);
@@ -474,7 +474,13 @@ function ScreenshotDetailView({
                     ...screenshotData,
                     selectedSubtitles: newSubtitles,
                     subtitleStyle: currentSubtitleStyle,
-                    finalImageData: finalImageData
+                    finalImageData: finalImageData,
+                    // 保存显示模式相关设置
+                    displayMode,
+                    stitchSeparator,
+                    stitchSeparatorWidth,
+                    stitchCropRatio,
+                    cardShowTimestamp
                 }
             });
 
@@ -487,7 +493,12 @@ function ScreenshotDetailView({
                         ...screenshotData,
                         selectedSubtitles: newSubtitles,
                         subtitleStyle: currentSubtitleStyle,
-                        finalImageData: finalImageData
+                        finalImageData: finalImageData,
+                        displayMode,
+                        stitchSeparator,
+                        stitchSeparatorWidth,
+                        stitchCropRatio,
+                        cardShowTimestamp
                     }
                 };
                 onUpdate(updatedAsset);

@@ -25,6 +25,12 @@ export interface ScreenshotTypeData {
         fontSize: number;
         layout: string;
     };
+    // 显示模式相关设置
+    displayMode?: 'overlay' | 'separated' | 'card' | 'stitch';
+    stitchSeparator?: 'white' | 'black' | 'none';
+    stitchSeparatorWidth?: number;
+    stitchCropRatio?: number;
+    cardShowTimestamp?: boolean;
 }
 
 export interface Asset {
