@@ -1150,20 +1150,23 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
         }
     };
 
-    // 批量下载 - 直接下载到 Downloads 文件夹
-    const handleBatchDownload = () => {
+    // 批量下载 - 通过主进程保存到 Downloads 文件夹
+    const handleBatchDownload = async () => {
         if (selectedIds.size === 0) return;
 
-        selectedItems.forEach(asset => {
-            if (asset.type === 'screenshot') {
-                const typeData = asset.typeData as ScreenshotTypeData;
-                const imageData = typeData.finalImageData || typeData.imageData;
-                const link = document.createElement('a');
-                link.href = imageData;
-                link.download = `screenshot_${asset.id}_${new Date(asset.createdAt).getTime()}.png`;
-                link.click();
-            }
-        });
+        const screenshotItems = selectedItems.filter(asset => asset.type === 'screenshot');
+
+        for (const asset of screenshotItems) {
+            const typeData = asset.typeData as ScreenshotTypeData;
+            const imageData = typeData.finalImageData || typeData.imageData;
+            const filename = `screenshot_${asset.id}_${new Date(asset.createdAt).getTime()}.png`;
+
+            await ipcRenderer.invoke('save-image-to-downloads', {
+                filename,
+                base64Data: imageData
+            });
+        }
+
         clearSelection();
     };
 

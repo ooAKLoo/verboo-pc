@@ -1,5 +1,6 @@
 import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { t, setLocale, loadLocaleFromStorage, saveLocaleToStorage, type Locale } from './i18n';
 
 // 自动更新 (仅在生产环境启用)
@@ -950,6 +951,25 @@ function setupIpcHandlers() {
     });
 
     console.log('[Main] Vocabulary IPC handlers registered successfully');
+
+    // ============ File Save IPC Handlers ============
+
+    // Save base64 image to Downloads folder
+    ipcMain.handle('save-image-to-downloads', async (event, data: { filename: string; base64Data: string }) => {
+        try {
+            const downloadsPath = app.getPath('downloads');
+            const filePath = path.join(downloadsPath, data.filename);
+
+            const base64Content = data.base64Data.replace(/^data:image\/\w+;base64,/, '');
+            const buffer = Buffer.from(base64Content, 'base64');
+
+            fs.writeFileSync(filePath, buffer);
+            return { success: true, filePath };
+        } catch (error) {
+            console.error('[IPC] save-image-to-downloads failed:', error);
+            return { success: false, error: (error as Error).message };
+        }
+    });
 }
 
 app.on('window-all-closed', () => {
