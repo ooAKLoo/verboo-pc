@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Save, Check, Edit3 } from 'lucide-react';
+import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Check, Edit3, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
 import { useTranslation } from '../contexts/I18nContext';
@@ -220,6 +220,12 @@ function ScreenshotDetailView({
     onDelete,
     onDownload,
     onUpdate,
+    onPrev,
+    onNext,
+    hasPrev,
+    hasNext,
+    currentIndex,
+    totalCount,
     t
 }: {
     asset: Asset;
@@ -228,6 +234,12 @@ function ScreenshotDetailView({
     onDelete: (id: number) => void;
     onDownload: (asset: Asset) => void;
     onUpdate: (asset: Asset) => void;
+    onPrev?: () => void;
+    onNext?: () => void;
+    hasPrev?: boolean;
+    hasNext?: boolean;
+    currentIndex?: number;
+    totalCount?: number;
     t: (key: string) => string;
 }) {
     const screenshotData = asset.typeData as ScreenshotTypeData;
@@ -247,10 +259,21 @@ function ScreenshotDetailView({
     // UI state
     const [timeRange, setTimeRange] = useState(10);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showAllSubtitles, setShowAllSubtitles] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<string | null>(null);
     const [loadingSubtitles, setLoadingSubtitles] = useState(true);
+
+    // Track if initial load is complete to avoid auto-save on mount
+    const isInitializedRef = useRef(false);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Refs to get latest values without causing re-renders
+    const selectedSubtitlesRef = useRef(selectedSubtitles);
+    const subtitleStyleRef = useRef(subtitleStyle);
+    const isSavingRef = useRef(false);
+    const lastSavedRef = useRef<string>('');
+    selectedSubtitlesRef.current = selectedSubtitles;
+    subtitleStyleRef.current = subtitleStyle;
 
     // Load subtitles from database - try subtitleId first, then by videoUrl
     useEffect(() => {
@@ -298,13 +321,21 @@ function ScreenshotDetailView({
     }, [screenshotData.selectedSubtitles, subtitles]);
 
     // Filter subtitles based on time range and search
+    // When searching, search all subtitles; otherwise filter by time range
     const filteredSubtitles = useMemo(() => {
         if (subtitles.length === 0) return [];
 
         const currentTime = screenshotData.timestamp;
         let filtered = subtitles.map((sub, index) => ({ sub, index }));
 
-        if (!showAllSubtitles) {
+        if (searchQuery.trim()) {
+            // Search in all subtitles (ignore time range)
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(({ sub }) =>
+                sub.text.toLowerCase().includes(query)
+            );
+        } else {
+            // No search query: filter by time range
             filtered = filtered.filter(({ sub }) => {
                 const subEnd = sub.start + (sub.duration || 0);
                 return (
@@ -317,15 +348,8 @@ function ScreenshotDetailView({
             });
         }
 
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(({ sub }) =>
-                sub.text.toLowerCase().includes(query)
-            );
-        }
-
         return filtered;
-    }, [subtitles, screenshotData.timestamp, timeRange, searchQuery, showAllSubtitles]);
+    }, [subtitles, screenshotData.timestamp, timeRange, searchQuery]);
 
     // Current subtitle index
     const currentSubtitleIndex = useMemo(() => {
@@ -435,16 +459,30 @@ function ScreenshotDetailView({
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleSave = async () => {
-        if (!canvasRef.current) return;
+    const doSave = useCallback(async () => {
+        if (!canvasRef.current || isSavingRef.current) return;
 
+        const currentSelectedSubtitles = selectedSubtitlesRef.current;
+        const currentSubtitleStyle = subtitleStyleRef.current;
+
+        // Create a signature of current state to detect if save is needed
+        const currentSignature = JSON.stringify({
+            selected: currentSelectedSubtitles,
+            style: currentSubtitleStyle
+        });
+
+        // Skip if nothing changed since last save
+        if (currentSignature === lastSavedRef.current) {
+            return;
+        }
+
+        isSavingRef.current = true;
         setIsSaving(true);
-        setSaveMessage(null);
 
         try {
             const finalImageData = canvasRef.current.toDataURL('image/png');
-            const newSubtitles = selectedSubtitles.length > 0
-                ? selectedSubtitles.map(i => ({
+            const newSubtitles = currentSelectedSubtitles.length > 0
+                ? currentSelectedSubtitles.map(i => ({
                     start: subtitles[i].start,
                     end: subtitles[i].start + (subtitles[i].duration || 0),
                     text: subtitles[i].text
@@ -456,85 +494,120 @@ function ScreenshotDetailView({
                 typeData: {
                     ...screenshotData,
                     selectedSubtitles: newSubtitles,
-                    subtitleStyle: subtitleStyle,
+                    subtitleStyle: currentSubtitleStyle,
                     finalImageData: finalImageData
                 }
             });
 
             if (response.success) {
+                lastSavedRef.current = currentSignature;
                 setSaveMessage(t('assets.saved'));
-                // Update the asset in parent
                 const updatedAsset = {
                     ...asset,
                     typeData: {
                         ...screenshotData,
                         selectedSubtitles: newSubtitles,
-                        subtitleStyle: subtitleStyle,
+                        subtitleStyle: currentSubtitleStyle,
                         finalImageData: finalImageData
                     }
                 };
                 onUpdate(updatedAsset);
-                setTimeout(() => setSaveMessage(null), 2000);
+                setTimeout(() => setSaveMessage(null), 1500);
             } else {
                 setSaveMessage(t('assets.saveFailed'));
+                setTimeout(() => setSaveMessage(null), 2000);
             }
         } catch (error) {
             console.error('Error saving:', error);
             setSaveMessage(t('assets.saveFailed'));
+            setTimeout(() => setSaveMessage(null), 2000);
         } finally {
+            isSavingRef.current = false;
             setIsSaving(false);
         }
-    };
+    }, [asset.id, screenshotData, subtitles, onUpdate, t]);
+
+    // Auto-save when selectedSubtitles or subtitleStyle changes
+    useEffect(() => {
+        // Skip auto-save on initial load
+        if (!isInitializedRef.current) {
+            return;
+        }
+
+        // Clear previous timeout
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Debounce save
+        saveTimeoutRef.current = setTimeout(() => {
+            doSave();
+        }, 500);
+
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, [selectedSubtitles, subtitleStyle]);
+
+    // Mark as initialized after subtitles are loaded and initial selection is set
+    useEffect(() => {
+        if (!loadingSubtitles && subtitles.length > 0) {
+            // Small delay to ensure initial selectedSubtitles is set
+            const timer = setTimeout(() => {
+                isInitializedRef.current = true;
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [loadingSubtitles, subtitles.length]);
 
     const hasSubtitles = subtitles.length > 0;
     const showSidebar = loadingSubtitles || hasSubtitles;
 
     return (
-        <div className="h-full flex flex-col bg-zinc-50">
-            {/* Header */}
-            <div className="flex-none px-4 py-3 flex items-center justify-between bg-white border-b border-zinc-100">
-                <button
-                    onClick={onBack}
-                    className="p-1.5 -ml-1 rounded-lg hover:bg-zinc-100 transition-colors"
-                >
-                    <ArrowLeft size={18} className="text-zinc-500" />
-                </button>
+        <div className="h-full flex bg-white rounded-2xl overflow-hidden">
+            {/* Left Section - Header + Main Content */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="flex-none px-5 py-3 flex items-center justify-between">
+                    <button
+                        onClick={onBack}
+                        className="p-1.5 -ml-1 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
+                        <ArrowLeft size={18} className="text-zinc-500" />
+                    </button>
 
-                <div className="flex items-center gap-1">
-                    {saveMessage && (
-                        <span className={`text-xs px-2 py-1 rounded ${saveMessage === t('assets.saved') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
-                            {saveMessage}
-                        </span>
-                    )}
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 rounded-lg transition-colors"
-                    >
-                        <Save size={14} />
-                        {isSaving ? t('assets.saving') : t('assets.save')}
-                    </button>
-                    <button
-                        onClick={() => onDownload(asset)}
-                        className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
-                        title={t('assets.download')}
-                    >
-                        <Download size={16} className="text-zinc-500" />
-                    </button>
-                    <button
-                        onClick={() => onDelete(asset.id)}
-                        className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                        title={t('assets.deleteAsset')}
-                    >
-                        <Trash2 size={16} className="text-red-500" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        {(isSaving || saveMessage) && (
+                            <span className={`text-xs px-2 py-1 rounded-lg flex items-center gap-1 ${
+                                isSaving ? 'text-zinc-500 bg-zinc-100' :
+                                saveMessage === t('assets.saved') ? 'text-green-600 bg-green-50' :
+                                saveMessage === t('assets.urlCopied') ? 'text-zinc-600 bg-[#f8f8f8]' : 'text-red-600 bg-red-50'
+                            }`}>
+                                {isSaving && <div className="w-3 h-3 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" />}
+                                {isSaving ? t('assets.saving') : saveMessage}
+                            </span>
+                        )}
+                        <button
+                            onClick={() => onDownload(asset)}
+                            className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
+                            title={t('assets.download')}
+                        >
+                            <Download size={16} className="text-zinc-500" />
+                        </button>
+                        <button
+                            onClick={() => onDelete(asset.id)}
+                            className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                            title={t('assets.deleteAsset')}
+                        >
+                            <Trash2 size={16} className="text-red-500" />
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            {/* Main Content - Left: Image + Style, Right: Subtitle List */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Left Panel - Image & Style Settings */}
-                <div className="flex-1 overflow-auto p-6">
+                {/* Main Content */}
+                <div className="flex-1 overflow-auto px-5 pb-5">
                     {/* Title & Meta */}
                     <div className="mb-4">
                         <h1 className="text-lg font-semibold text-zinc-900 leading-snug mb-2">
@@ -542,17 +615,21 @@ function ScreenshotDetailView({
                         </h1>
                         <div className="flex items-center justify-between text-xs text-zinc-400">
                             <div className="flex items-center gap-3">
-                                <a
-                                    href={asset.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1.5 hover:text-blue-500 transition-colors"
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(asset.url);
+                                        setSaveMessage(t('assets.urlCopied'));
+                                        setTimeout(() => setSaveMessage(null), 1500);
+                                    }}
+                                    className="group flex items-center gap-1.5 hover:text-blue-500 transition-colors cursor-pointer"
+                                    title={t('assets.clickToCopy')}
                                 >
                                     {asset.favicon && (
                                         <img src={asset.favicon} alt="" className="w-4 h-4 rounded" />
                                     )}
                                     <span className="max-w-[300px] truncate">{asset.url}</span>
-                                </a>
+                                    <Copy size={12} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                </button>
                                 {asset.author?.name && (
                                     <>
                                         <span className="w-1 h-1 rounded-full bg-zinc-300" />
@@ -574,7 +651,7 @@ function ScreenshotDetailView({
 
                     {/* Style Settings - Below Image */}
                     {hasSubtitles && (
-                        <div className="mt-4 p-3 bg-white rounded-xl border border-zinc-100">
+                        <div className="mt-4 p-3 bg-[#f8f8f8] rounded-xl">
                             <div className="flex items-center gap-6 flex-wrap">
                                 {/* Font Size */}
                                 <div className="flex items-center gap-2">
@@ -595,14 +672,22 @@ function ScreenshotDetailView({
                                 {/* Position */}
                                 <div className="flex items-center gap-2">
                                     <AlignVerticalJustifyStart size={12} className="text-zinc-400" />
-                                    <div className="flex p-0.5 bg-zinc-200 rounded-md">
+                                    <div className="relative grid grid-cols-2 gap-0.5 p-1 bg-white rounded-lg">
+                                        {/* Sliding indicator */}
+                                        <div
+                                            className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                            style={{
+                                                width: 'calc(50% - 6px)',
+                                                left: subtitleStyle.position === 'top' ? '4px' : 'calc(50% + 2px)'
+                                            }}
+                                        />
                                         {['top', 'bottom'].map((pos) => (
                                             <button
                                                 key={pos}
                                                 onClick={() => setSubtitleStyle({ ...subtitleStyle, position: pos })}
-                                                className={`px-2 py-0.5 text-[11px] font-medium rounded transition-all ${
+                                                className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
                                                     subtitleStyle.position === pos
-                                                        ? 'bg-white text-zinc-900 shadow-sm'
+                                                        ? 'text-zinc-900'
                                                         : 'text-zinc-500 hover:text-zinc-700'
                                                 }`}
                                             >
@@ -615,7 +700,17 @@ function ScreenshotDetailView({
                                 {/* Background */}
                                 <div className="flex items-center gap-2">
                                     <Palette size={12} className="text-zinc-400" />
-                                    <div className="flex p-0.5 bg-zinc-200 rounded-md">
+                                    <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
+                                        {/* Sliding indicator */}
+                                        <div
+                                            className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                            style={{
+                                                width: 'calc(33.333% - 4px)',
+                                                left: subtitleStyle.background === 'semi-transparent' ? '4px'
+                                                    : subtitleStyle.background === 'solid' ? 'calc(33.333% + 2px)'
+                                                    : 'calc(66.666%)'
+                                            }}
+                                        />
                                         {[
                                             { value: 'semi-transparent', labelKey: 'assets.bgSemiTransparent' },
                                             { value: 'solid', labelKey: 'assets.bgSolid' },
@@ -624,9 +719,9 @@ function ScreenshotDetailView({
                                             <button
                                                 key={opt.value}
                                                 onClick={() => setSubtitleStyle({ ...subtitleStyle, background: opt.value })}
-                                                className={`px-2 py-0.5 text-[11px] font-medium rounded transition-all ${
+                                                className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
                                                     subtitleStyle.background === opt.value
-                                                        ? 'bg-white text-zinc-900 shadow-sm'
+                                                        ? 'text-zinc-900'
                                                         : 'text-zinc-500 hover:text-zinc-700'
                                                 }`}
                                             >
@@ -638,126 +733,156 @@ function ScreenshotDetailView({
                             </div>
                         </div>
                     )}
+
                 </div>
 
-                {/* Right Sidebar - Subtitle Selection */}
-                {loadingSubtitles ? (
-                    <div className="w-72 flex-shrink-0 border-l border-zinc-100 flex items-center justify-center">
+                {/* Navigation Buttons - Fixed at Bottom */}
+                {(onPrev || onNext) && (
+                    <div className="flex-none px-5 py-3 flex items-center justify-between">
+                        <button
+                            onClick={onPrev}
+                            disabled={!hasPrev}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                hasPrev
+                                    ? 'text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200'
+                                    : 'text-zinc-300 cursor-not-allowed'
+                            }`}
+                        >
+                            <ChevronLeft size={16} />
+                            <span>{t('assets.prevAsset')}</span>
+                        </button>
+
+                        {/* Current position indicator */}
+                        {currentIndex !== undefined && totalCount !== undefined && (
+                            <span className="text-xs text-zinc-400 font-mono">
+                                {currentIndex + 1} / {totalCount}
+                            </span>
+                        )}
+
+                        <button
+                            onClick={onNext}
+                            disabled={!hasNext}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                hasNext
+                                    ? 'text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200'
+                                    : 'text-zinc-300 cursor-not-allowed'
+                            }`}
+                        >
+                            <span>{t('assets.nextAsset')}</span>
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Right Section - Subtitle Selection */}
+            {loadingSubtitles ? (
+                    <div className="w-72 flex-shrink-0 m-3 ml-0 bg-[#f8f8f8] rounded-2xl flex items-center justify-center">
                         <div className="text-center">
                             <div className="animate-spin w-5 h-5 border-2 border-zinc-300 border-t-zinc-600 rounded-full mx-auto mb-2" />
                             <span className="text-[12px] text-zinc-400">{t('assets.loadingSubtitles')}</span>
                         </div>
                     </div>
                 ) : hasSubtitles && (
-                    <div className="w-72 flex-shrink-0 border-l border-zinc-100 flex flex-col bg-white">
+                    <div className="w-72 flex-shrink-0 m-3 ml-0 bg-[#f8f8f8] rounded-2xl flex flex-col overflow-hidden">
                         {/* Sidebar Header */}
-                        <div className="p-3 border-b border-zinc-100">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[12px] font-medium text-zinc-700">{t('assets.subtitleSelect')}</span>
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => {
-                                            const indices = filteredSubtitles.map(({ index }) => index);
-                                            setSelectedSubtitles(prev => {
-                                                const newSet = new Set([...prev, ...indices]);
-                                                return Array.from(newSet).sort((a, b) => a - b);
-                                            });
-                                        }}
-                                        className="px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                    >
-                                        {t('assets.selectAll')}
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedSubtitles([])}
-                                        className="px-2 py-0.5 text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 rounded transition-colors"
-                                    >
-                                        {t('assets.clear')}
-                                    </button>
-                                </div>
-                            </div>
-                            {/* Search */}
-                            <div className="relative">
-                                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={t('assets.searchSubtitle')}
-                                    className="w-full h-7 pl-7 pr-2 text-[11px] bg-zinc-100 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 placeholder:text-zinc-400"
-                                />
-                            </div>
-                            {/* Time Range Filter */}
-                            <div className="flex items-center gap-2 mt-2">
-                                <Clock size={11} className="text-zinc-400" />
-                                <input
-                                    type="range"
-                                    min={5}
-                                    max={60}
-                                    step={5}
-                                    value={timeRange}
-                                    onChange={(e) => setTimeRange(Number(e.target.value))}
-                                    disabled={showAllSubtitles}
-                                    className="flex-1 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer disabled:opacity-40 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
-                                />
-                                <span className="text-[10px] text-zinc-500 font-mono w-6">±{timeRange}s</span>
-                                <label className="flex items-center gap-1 cursor-pointer">
-                                    <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-all ${
-                                        showAllSubtitles ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
-                                    }`}>
-                                        {showAllSubtitles && <Check size={8} className="text-white" />}
-                                    </div>
-                                    <span className="text-[10px] text-zinc-500">{t('assets.all')}</span>
-                                </label>
+                        <div className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[12px] font-medium text-zinc-700">{t('assets.subtitleSelect')}</span>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => {
+                                        const indices = filteredSubtitles.map(({ index }) => index);
+                                        setSelectedSubtitles(prev => {
+                                            const newSet = new Set([...prev, ...indices]);
+                                            return Array.from(newSet).sort((a, b) => a - b);
+                                        });
+                                    }}
+                                    className="px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                >
+                                    {t('assets.selectAll')}
+                                </button>
+                                <button
+                                    onClick={() => setSelectedSubtitles([])}
+                                    className="px-2 py-0.5 text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 rounded transition-colors"
+                                >
+                                    {t('assets.clear')}
+                                </button>
                             </div>
                         </div>
-
-                        {/* Subtitle List */}
-                        <div ref={subtitleListRef} className="flex-1 overflow-auto p-2 space-y-1.5">
-                            {filteredSubtitles.length === 0 ? (
-                                <div className="text-center py-8 text-[12px] text-zinc-400">
-                                    {searchQuery ? t('assets.noMatchingSubtitle') : t('assets.noSubtitle')}
-                                </div>
-                            ) : (
-                                filteredSubtitles.map(({ sub, index }) => {
-                                    const isCurrent = index === currentSubtitleIndex;
-                                    const isSelected = selectedSubtitles.includes(index);
-                                    return (
-                                        <div
-                                            key={index}
-                                            data-index={index}
-                                            onClick={() => toggleSubtitle(index)}
-                                            className={`p-2 rounded-lg cursor-pointer transition-all ${
-                                                isCurrent
-                                                    ? 'bg-blue-50 ring-1 ring-blue-200'
-                                                    : isSelected
-                                                    ? 'bg-green-50 ring-1 ring-green-200'
-                                                    : 'bg-zinc-50 hover:bg-zinc-100'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className={`w-3 h-3 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                                    isSelected ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
-                                                }`}>
-                                                    {isSelected && <Check size={7} className="text-white" />}
-                                                </div>
-                                                <span className="text-[10px] font-mono text-zinc-400">{formatTime(sub.start)}</span>
-                                                {isCurrent && (
-                                                    <span className="px-1 py-0.5 bg-blue-500 text-white text-[8px] font-semibold rounded uppercase">
-                                                        {t('assets.current')}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-[11px] text-zinc-600 leading-relaxed line-clamp-2">
-                                                {sub.text}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
+                        {/* Search */}
+                        <div className="relative">
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={t('assets.searchSubtitle')}
+                                className="w-full h-7 pl-7 pr-2 text-[11px] bg-zinc-100 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 placeholder:text-zinc-400"
+                            />
+                        </div>
+                        {/* Time Range Filter */}
+                        <div className="flex items-center gap-2 mt-2">
+                            <Clock size={11} className="text-zinc-400" />
+                            <input
+                                type="range"
+                                min={5}
+                                max={60}
+                                step={5}
+                                value={timeRange}
+                                onChange={(e) => setTimeRange(Number(e.target.value))}
+                                className="flex-1 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
+                            />
+                            <span className="text-[10px] text-zinc-500 font-mono w-6">±{timeRange}s</span>
                         </div>
                     </div>
-                )}
-            </div>
+
+                    {/* Subtitle List */}
+                    <div ref={subtitleListRef} className="flex-1 overflow-auto px-2 pb-2 space-y-1.5">
+                        {filteredSubtitles.length === 0 ? (
+                            <div className="text-center py-8 text-[12px] text-zinc-400">
+                                {searchQuery ? t('assets.noMatchingSubtitle') : t('assets.noSubtitle')}
+                            </div>
+                        ) : (
+                            filteredSubtitles.map(({ sub, index }) => {
+                                const isCurrent = index === currentSubtitleIndex;
+                                const isSelected = selectedSubtitles.includes(index);
+                                return (
+                                    <div
+                                        key={index}
+                                        data-index={index}
+                                        onClick={() => toggleSubtitle(index)}
+                                        className={`p-2 rounded-lg cursor-pointer transition-all ${
+                                            isCurrent
+                                                ? 'bg-blue-50'
+                                                : isSelected
+                                                ? 'bg-green-50'
+                                                : 'bg-white hover:bg-zinc-50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`w-3 h-3 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                                isSelected ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
+                                            }`}>
+                                                {isSelected && <Check size={7} className="text-white" />}
+                                            </div>
+                                            <span className="text-[10px] font-mono text-zinc-400">{formatTime(sub.start)}</span>
+                                            {isCurrent && (
+                                                <span className="px-1 py-0.5 bg-blue-500 text-white text-[8px] font-semibold rounded uppercase">
+                                                    {t('assets.current')}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[11px] text-zinc-600 leading-relaxed line-clamp-2">
+                                            {sub.text}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1039,9 +1164,9 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
         };
 
         return (
-            <div className="h-full flex flex-col bg-zinc-50">
+            <div className="h-full flex flex-col bg-white rounded-2xl overflow-hidden">
                 {/* Minimal Header */}
-                <div className="flex-none px-4 py-3 flex items-center justify-between bg-white border-b border-zinc-100">
+                <div className="flex-none px-5 py-3 flex items-center justify-between">
                     <button
                         onClick={() => setSelectedAsset(null)}
                         className="p-1.5 -ml-1 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -1071,7 +1196,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
 
                 {/* Main Content - Scrollable */}
                 <div className="flex-1 overflow-auto">
-                    <div className="max-w-3xl mx-auto p-6">
+                    <div className="max-w-3xl mx-auto px-5 pb-5">
 
                         {/* Title & Meta Row */}
                         <div className="mb-4">
@@ -1132,7 +1257,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                         {/* Subtitle Section - Clickable for Edit */}
                         {isScreenshot && screenshotData?.selectedSubtitles && screenshotData.selectedSubtitles.length > 0 && (
                             <div
-                                className={`mb-5 p-4 bg-white rounded-xl border border-zinc-100 ${onEditScreenshot ? 'cursor-pointer hover:border-blue-200 hover:bg-blue-50/30 transition-colors group' : ''}`}
+                                className={`mb-5 p-4 bg-zinc-50 rounded-xl ${onEditScreenshot ? 'cursor-pointer hover:bg-blue-50/50 transition-colors group' : ''}`}
                                 onClick={handleImageClick}
                             >
                                 <div className="flex items-center justify-between mb-3">
@@ -1156,7 +1281,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
 
                         {/* Content Text */}
                         {!isScreenshot && contentData?.content && (
-                            <div className="mb-5 p-4 bg-white rounded-xl border border-zinc-100">
+                            <div className="mb-5 p-4 bg-zinc-50 rounded-xl">
                                 <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">{t('assets.labelContent')}</div>
                                 <p className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">
                                     {contentData.content}
@@ -1181,7 +1306,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                         )}
 
                         {/* Footer Meta */}
-                        <div className="flex items-center justify-between py-4 border-t border-zinc-100">
+                        <div className="flex items-center justify-between py-4 mt-2 bg-zinc-50 rounded-xl px-4">
                             {/* Source */}
                             <div className="flex items-center gap-2">
                                 {selectedAsset.favicon && (
@@ -1229,10 +1354,27 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
     // Handle delete from detail view
     const handleDeleteFromDetail = async (id: number) => {
         try {
+            // Find current index before deleting
+            const currentIndex = filteredAssets.findIndex(a => a.id === id);
+
             const response = await ipcRenderer.invoke('delete-asset', id);
             if (response.success) {
-                setAssets(assets.filter(a => a.id !== id));
-                setSelectedAsset(null);
+                const newAssets = assets.filter(a => a.id !== id);
+                setAssets(newAssets);
+
+                // Calculate new filtered assets after deletion
+                const newFilteredAssets = filteredAssets.filter(a => a.id !== id);
+
+                if (newFilteredAssets.length === 0) {
+                    // No more assets, close detail view
+                    setSelectedAsset(null);
+                } else if (currentIndex < newFilteredAssets.length) {
+                    // Switch to next asset (same index position)
+                    setSelectedAsset(newFilteredAssets[currentIndex]);
+                } else {
+                    // Was last item, switch to previous (now last)
+                    setSelectedAsset(newFilteredAssets[newFilteredAssets.length - 1]);
+                }
             }
         } catch (error) {
             console.error('Error deleting asset:', error);
@@ -1250,17 +1392,42 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
         link.click();
     };
 
+    // Navigation logic for switching between assets
+    const currentAssetIndex = useMemo(() => {
+        if (!selectedAsset) return -1;
+        return filteredAssets.findIndex(a => a.id === selectedAsset.id);
+    }, [selectedAsset, filteredAssets]);
+
+    const handlePrevAsset = useCallback(() => {
+        if (currentAssetIndex > 0) {
+            setSelectedAsset(filteredAssets[currentAssetIndex - 1]);
+        }
+    }, [currentAssetIndex, filteredAssets]);
+
+    const handleNextAsset = useCallback(() => {
+        if (currentAssetIndex < filteredAssets.length - 1) {
+            setSelectedAsset(filteredAssets[currentAssetIndex + 1]);
+        }
+    }, [currentAssetIndex, filteredAssets]);
+
     // If screenshot is selected, show inline editor
     if (selectedAsset && selectedAsset.type === 'screenshot') {
         return (
             <div className="h-full bg-white rounded-xl overflow-hidden">
                 <ScreenshotDetailView
+                    key={selectedAsset.id}
                     asset={selectedAsset}
                     onBack={() => setSelectedAsset(null)}
                     onClose={onClose}
                     onDelete={handleDeleteFromDetail}
                     onDownload={handleDownloadFromDetail}
                     onUpdate={handleAssetUpdate}
+                    onPrev={handlePrevAsset}
+                    onNext={handleNextAsset}
+                    hasPrev={currentAssetIndex > 0}
+                    hasNext={currentAssetIndex < filteredAssets.length - 1}
+                    currentIndex={currentAssetIndex}
+                    totalCount={filteredAssets.length}
                     t={t}
                 />
             </div>
@@ -1277,10 +1444,10 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
     }
 
     return (
-        <div className="h-full bg-white rounded-xl flex flex-col relative">
+        <div className="h-full bg-white rounded-2xl flex flex-col relative">
 
             {/* Header with close button */}
-            <div className="flex-none px-4 py-3 flex items-center justify-between border-b border-zinc-100">
+            <div className="flex-none px-5 py-3 flex items-center justify-between">
                 <span className="text-sm font-medium text-zinc-700">{t('assets.title')}</span>
                 <button
                     onClick={onClose}
@@ -1291,7 +1458,7 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
             </div>
 
             {/* Filter Bar */}
-            <div className="flex-none px-8 py-3 flex items-center gap-3">
+            <div className="flex-none px-5 pb-3 flex items-center gap-3">
                 {/* Sort Trigger */}
                 <FilterPopover
                     trigger={

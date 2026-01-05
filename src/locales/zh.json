@@ -155,7 +155,11 @@
     "clickToEdit": "点击编辑",
     "batchDownload": "下载",
     "batchDelete": "删除",
-    "cancel": "取消"
+    "cancel": "取消",
+    "prevAsset": "上一个",
+    "nextAsset": "下一个",
+    "urlCopied": "链接已复制",
+    "clickToCopy": "点击复制链接"
   },
   "subtitleDialog": {
     "title": "获取字幕",

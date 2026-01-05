@@ -155,7 +155,11 @@
     "clickToEdit": "Click to edit",
     "batchDownload": "Download",
     "batchDelete": "Delete",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "prevAsset": "Previous",
+    "nextAsset": "Next",
+    "urlCopied": "Link copied",
+    "clickToCopy": "Click to copy link"
   },
   "subtitleDialog": {
     "title": "Get Subtitles",
