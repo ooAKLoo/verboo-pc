@@ -12,7 +12,7 @@ export class CardMode extends BaseRenderer implements IRenderMode {
   private readonly CARD_PADDING = 40;
   private readonly SOURCE_HEIGHT = 56;
   private readonly BORDER_RADIUS = 16;
-  private readonly ACCENT_BAR_WIDTH = 3;
+  private readonly ACCENT_BAR_WIDTH = 4;
 
   render(context: RenderContext): void {
     const { canvas, ctx, img, subs, config } = context;
@@ -240,13 +240,18 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     const textGap = 20; // 装饰条与文字间距
     const textPaddingRight = 40;
 
-    // 绘制左侧装饰条（3px 宽，淡灰色）
-    const barHeight = Math.min(areaHeight - 40, subs.length * lineHeight);
-    const barY = startY + (areaHeight - barHeight) / 2;
+    const totalTextHeight = subs.length * lineHeight;
+    // 文本区域垂直居中的起始 Y 位置（第一行文本中心点）
+    const textAreaStartY = startY + (areaHeight - totalTextHeight) / 2 + lineHeight / 2;
 
+    // 装饰条与文本精确对齐：从第一行顶部到最后一行底部
+    const barY = textAreaStartY - lineHeight / 2 + fontSize * 0.2; // 微调使视觉居中
+    const barHeight = totalTextHeight - fontSize * 0.4; // 略短于文本高度，视觉更协调
+
+    // 绘制左侧装饰条（淡灰色，圆角）
     ctx.fillStyle = '#e0e0e0';
     ctx.beginPath();
-    ctx.roundRect(this.CARD_PADDING, barY, this.ACCENT_BAR_WIDTH, barHeight, 2);
+    ctx.roundRect(this.CARD_PADDING, barY, this.ACCENT_BAR_WIDTH, barHeight, this.ACCENT_BAR_WIDTH / 2);
     ctx.fill();
 
     // 绘制字幕文本（font-weight: 400, color: #444）
@@ -255,9 +260,8 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#444444';
 
-    const totalTextHeight = subs.length * lineHeight;
     const textStartX = this.CARD_PADDING + this.ACCENT_BAR_WIDTH + textGap;
-    let yPosition = startY + (areaHeight - totalTextHeight) / 2 + fontSize / 2;
+    let yPosition = textAreaStartY;
     const maxTextWidth = width - textStartX - textPaddingRight;
 
     subs.forEach((sub) => {
@@ -296,7 +300,7 @@ export class CardMode extends BaseRenderer implements IRenderMode {
    */
   private calculateCardSubtitleAreaHeight(subsCount: number, fontSize: number): number {
     const lineHeight = fontSize * 2; // 行高 2 倍
-    const padding = 64; // 上下间距
+    const padding = 80; // 上下间距（增加以确保不超出）
     return subsCount * lineHeight + padding;
   }
 }
