@@ -89,14 +89,11 @@ function getChromeUserAgent(): string {
 // Export for use in renderer
 export const CHROME_USER_AGENT = getChromeUserAgent();
 
-// ============ WebContentsView Manager ============
+// ============ WebContentsView Manager (单视图模式) ============
 
-// Store active WebContentsViews by tabId
-const webContentsViews = new Map<string, WebContentsView>();
+// 单个 WebContentsView 实例
+let mainWebContentsView: WebContentsView | null = null;
 let mainWindow: BrowserWindow | null = null;
-
-// Current active tab for positioning
-let activeTabId: string | null = null;
 
 // View bounds (will be updated by renderer)
 let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
@@ -105,13 +102,13 @@ let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
 let isHtmlFullscreen = false;
 
 /**
- * Create a new WebContentsView for a tab
+ * Create the WebContentsView (单视图模式)
  */
 function createWebContentsView(tabId: string, url: string, initialVisible: boolean = true): void {
     if (!mainWindow) return;
 
-    // Remove existing view if any
-    if (webContentsViews.has(tabId)) {
+    // 销毁已存在的视图
+    if (mainWebContentsView) {
         destroyWebContentsView(tabId);
     }
 
@@ -145,24 +142,15 @@ function createWebContentsView(tabId: string, url: string, initialVisible: boole
     view.webContents.loadURL(url);
 
     // Store reference
-    webContentsViews.set(tabId, view);
+    mainWebContentsView = view;
 
-    // If no active tab yet, set this as active
-    if (!activeTabId) {
-        activeTabId = tabId;
-    }
-
-    // Set visibility based on initialVisible parameter
-    if (initialVisible && tabId === activeTabId) {
-        view.setVisible(true);
-    } else {
-        view.setVisible(false);
-    }
+    // Set visibility
+    view.setVisible(initialVisible);
 
     // Setup event handlers
     setupViewEventHandlers(tabId, view);
 
-    console.log('[Main] WebContentsView created for tab:', tabId);
+    console.log('[Main] WebContentsView created, visible:', initialVisible);
 }
 
 /**
@@ -287,15 +275,14 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
 
         // Use setTimeout to ensure bounds update after layout change
         setTimeout(() => {
-            const currentView = webContentsViews.get(tabId);
-            if (currentView && mainWindow) {
+            if (mainWebContentsView && mainWindow) {
                 const [width, height] = mainWindow.getContentSize();
                 console.log('[Main] Setting fullscreen bounds:', { width, height });
-                currentView.setBounds({ x: 0, y: 0, width, height });
+                mainWebContentsView.setBounds({ x: 0, y: 0, width, height });
 
                 // Remove border radius in fullscreen
-                if (typeof currentView.setBorderRadius === 'function') {
-                    currentView.setBorderRadius(0);
+                if (typeof mainWebContentsView.setBorderRadius === 'function') {
+                    mainWebContentsView.setBorderRadius(0);
                 }
             }
         }, 50);
@@ -310,13 +297,12 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
 
         // Use setTimeout to ensure bounds update after layout change
         setTimeout(() => {
-            const currentView = webContentsViews.get(tabId);
-            if (currentView) {
-                currentView.setBounds(viewBounds);
+            if (mainWebContentsView) {
+                mainWebContentsView.setBounds(viewBounds);
 
                 // Restore border radius
-                if (typeof currentView.setBorderRadius === 'function') {
-                    currentView.setBorderRadius(16);
+                if (typeof mainWebContentsView.setBorderRadius === 'function') {
+                    mainWebContentsView.setBorderRadius(16);
                 }
             }
         }, 50);
@@ -324,27 +310,14 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
 }
 
 /**
- * Destroy a WebContentsView
+ * Destroy the WebContentsView
  */
 function destroyWebContentsView(tabId: string): void {
-    const view = webContentsViews.get(tabId);
-    if (view && mainWindow) {
-        mainWindow.contentView.removeChildView(view);
-        // WebContentsView doesn't have destroy(), just remove reference
-        webContentsViews.delete(tabId);
-        console.log('[Main] WebContentsView destroyed for tab:', tabId);
-    }
-}
-
-/**
- * Switch active tab
- */
-function switchActiveTab(tabId: string): void {
-    activeTabId = tabId;
-
-    // Hide all views except the active one
-    for (const [id, view] of webContentsViews) {
-        view.setVisible(id === tabId);
+    if (mainWebContentsView && mainWindow) {
+        mainWindow.contentView.removeChildView(mainWebContentsView);
+        mainWebContentsView.webContents.close();
+        mainWebContentsView = null;
+        console.log('[Main] WebContentsView destroyed');
     }
 }
 
@@ -359,9 +332,8 @@ function updateViewBounds(bounds: { x: number; y: number; width: number; height:
         return;
     }
 
-    // Update all views' bounds
-    for (const view of webContentsViews.values()) {
-        view.setBounds(bounds);
+    if (mainWebContentsView) {
+        mainWebContentsView.setBounds(bounds);
     }
 }
 
@@ -419,20 +391,18 @@ function createWindow() {
 
     // Clean up views before window closes - stop media playback
     win.on('close', () => {
-        // Destroy all WebContentsViews to stop media playback
-        for (const [tabId, view] of webContentsViews) {
+        if (mainWebContentsView) {
             try {
-                // Remove from window first
                 if (mainWindow) {
-                    mainWindow.contentView.removeChildView(view);
+                    mainWindow.contentView.removeChildView(mainWebContentsView);
                 }
-                // Close the webContents to stop media
-                view.webContents.close();
+                mainWebContentsView.webContents.close();
+                mainWebContentsView = null;
+                console.log('[Main] WebContentsView cleaned up on window close');
             } catch (e) {
-                console.error('[Main] Error destroying view:', tabId, e);
+                console.error('[Main] Error destroying view:', e);
             }
         }
-        webContentsViews.clear();
     });
 
     // Clean up reference when window is closed
@@ -518,17 +488,6 @@ function setupIpcHandlers() {
         }
     });
 
-    // Switch active tab
-    ipcMain.handle('wcv-switch-tab', async (event, tabId: string) => {
-        try {
-            switchActiveTab(tabId);
-            return { success: true };
-        } catch (error) {
-            console.error('[IPC] wcv-switch-tab failed:', error);
-            return { success: false, error: (error as Error).message };
-        }
-    });
-
     // Update view bounds
     ipcMain.handle('wcv-update-bounds', async (event, bounds: { x: number; y: number; width: number; height: number }) => {
         try {
@@ -543,18 +502,17 @@ function setupIpcHandlers() {
     // Navigate to URL
     ipcMain.handle('wcv-navigate', async (event, tabId: string, url: string) => {
         try {
-            console.log('[IPC] wcv-navigate called:', tabId, url);
-            const view = webContentsViews.get(tabId);
-            if (view) {
+            console.log('[IPC] wcv-navigate called:', url);
+            if (mainWebContentsView) {
                 let finalUrl = url;
                 if (!finalUrl.startsWith('http')) {
                     finalUrl = 'https://' + finalUrl;
                 }
                 console.log('[IPC] Loading URL:', finalUrl);
-                view.webContents.loadURL(finalUrl);
+                mainWebContentsView.webContents.loadURL(finalUrl);
                 return { success: true };
             }
-            console.log('[IPC] View not found for tab:', tabId, 'Available tabs:', Array.from(webContentsViews.keys()));
+            console.log('[IPC] View not found');
             return { success: false, error: 'View not found' };
         } catch (error) {
             console.error('[IPC] wcv-navigate failed:', error);
@@ -565,9 +523,8 @@ function setupIpcHandlers() {
     // Go back
     ipcMain.handle('wcv-go-back', async (event, tabId: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view && view.webContents.navigationHistory.canGoBack()) {
-                view.webContents.navigationHistory.goBack();
+            if (mainWebContentsView && mainWebContentsView.webContents.navigationHistory.canGoBack()) {
+                mainWebContentsView.webContents.navigationHistory.goBack();
                 return { success: true };
             }
             return { success: false, error: 'Cannot go back' };
@@ -580,9 +537,8 @@ function setupIpcHandlers() {
     // Go forward
     ipcMain.handle('wcv-go-forward', async (event, tabId: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view && view.webContents.navigationHistory.canGoForward()) {
-                view.webContents.navigationHistory.goForward();
+            if (mainWebContentsView && mainWebContentsView.webContents.navigationHistory.canGoForward()) {
+                mainWebContentsView.webContents.navigationHistory.goForward();
                 return { success: true };
             }
             return { success: false, error: 'Cannot go forward' };
@@ -595,9 +551,8 @@ function setupIpcHandlers() {
     // Reload
     ipcMain.handle('wcv-reload', async (event, tabId: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view) {
-                view.webContents.reload();
+            if (mainWebContentsView) {
+                mainWebContentsView.webContents.reload();
                 return { success: true };
             }
             return { success: false, error: 'View not found' };
@@ -610,9 +565,8 @@ function setupIpcHandlers() {
     // Get current URL
     ipcMain.handle('wcv-get-url', async (event, tabId: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view) {
-                return { success: true, url: view.webContents.getURL() };
+            if (mainWebContentsView) {
+                return { success: true, url: mainWebContentsView.webContents.getURL() };
             }
             return { success: false, error: 'View not found' };
         } catch (error) {
@@ -624,12 +578,11 @@ function setupIpcHandlers() {
     // Get navigation state
     ipcMain.handle('wcv-get-nav-state', async (event, tabId: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view) {
+            if (mainWebContentsView) {
                 return {
                     success: true,
-                    canGoBack: view.webContents.navigationHistory.canGoBack(),
-                    canGoForward: view.webContents.navigationHistory.canGoForward()
+                    canGoBack: mainWebContentsView.webContents.navigationHistory.canGoBack(),
+                    canGoForward: mainWebContentsView.webContents.navigationHistory.canGoForward()
                 };
             }
             return { success: false, error: 'View not found' };
@@ -642,9 +595,8 @@ function setupIpcHandlers() {
     // Execute JavaScript in view
     ipcMain.handle('wcv-execute-script', async (event, tabId: string, script: string) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view) {
-                const result = await view.webContents.executeJavaScript(script);
+            if (mainWebContentsView) {
+                const result = await mainWebContentsView.webContents.executeJavaScript(script);
                 return { success: true, result };
             }
             return { success: false, error: 'View not found' };
@@ -657,9 +609,8 @@ function setupIpcHandlers() {
     // Send message to view (for video capture, etc.)
     ipcMain.handle('wcv-send', async (event, tabId: string, channel: string, ...args: any[]) => {
         try {
-            const view = webContentsViews.get(tabId);
-            if (view) {
-                view.webContents.send(channel, ...args);
+            if (mainWebContentsView) {
+                mainWebContentsView.webContents.send(channel, ...args);
                 return { success: true };
             }
             return { success: false, error: 'View not found' };
@@ -669,11 +620,11 @@ function setupIpcHandlers() {
         }
     });
 
-    // Hide all views (for modals/dialogs)
+    // Hide view (for modals/dialogs)
     ipcMain.handle('wcv-hide-all', async () => {
         try {
-            for (const view of webContentsViews.values()) {
-                view.setVisible(false);
+            if (mainWebContentsView) {
+                mainWebContentsView.setVisible(false);
             }
             return { success: true };
         } catch (error) {
@@ -682,14 +633,11 @@ function setupIpcHandlers() {
         }
     });
 
-    // Show active view (restore after modal closes)
+    // Show view (restore after modal closes)
     ipcMain.handle('wcv-show-active', async () => {
         try {
-            if (activeTabId) {
-                const view = webContentsViews.get(activeTabId);
-                if (view) {
-                    view.setVisible(true);
-                }
+            if (mainWebContentsView) {
+                mainWebContentsView.setVisible(true);
             }
             return { success: true };
         } catch (error) {
