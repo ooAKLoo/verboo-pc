@@ -5,10 +5,11 @@ interface ToastProps {
   message: string;
   type?: 'success' | 'error' | 'screenshot';
   duration?: number;
+  position?: 'top' | 'bottom';
   onClose: () => void;
 }
 
-export function Toast({ message, type = 'success', duration = 2000, onClose }: ToastProps) {
+export function Toast({ message, type = 'success', duration = 2000, position = 'bottom', onClose }: ToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
@@ -36,17 +37,24 @@ export function Toast({ message, type = 'success', duration = 2000, onClose }: T
     screenshot: 'bg-[#18181b] text-white'
   };
 
+  const positionClasses = position === 'top'
+    ? 'fixed top-[10px] left-1/2 -translate-x-1/2 z-[100] pointer-events-none'
+    : 'fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none';
+
+  const animationClasses = isVisible && !isLeaving
+    ? 'opacity-100 translate-y-0'
+    : position === 'top'
+      ? 'opacity-0 -translate-y-2'
+      : 'opacity-0 translate-y-2';
+
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none">
+    <div className={positionClasses}>
       <div
         className={`
           flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg
           ${styles[type]}
           transition-all duration-200 ease-out
-          ${isVisible && !isLeaving
-            ? 'opacity-100 translate-y-0'
-            : 'opacity-0 translate-y-2'
-          }
+          ${animationClasses}
         `}
       >
         <span className="flex-shrink-0 opacity-80">{icons[type]}</span>

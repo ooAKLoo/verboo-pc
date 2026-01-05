@@ -260,6 +260,19 @@ function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
         console.log('[Main] Bilibili subtitle result received:', result.success ? `${result.count} items` : result.error);
         mainWindow?.webContents.send('wcv-bilibili-subtitle-result', tabId, result);
     });
+
+    // Capture keyboard shortcuts in WCV and forward to renderer
+    webContents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return;
+        const isMod = input.meta || input.control;
+        if (!isMod) return;
+
+        const key = input.key.toLowerCase();
+        if (key === 's' || key === 'i' || key === 'd') {
+            event.preventDefault();
+            mainWindow?.webContents.send('wcv-shortcut', key);
+        }
+    });
 }
 
 /**

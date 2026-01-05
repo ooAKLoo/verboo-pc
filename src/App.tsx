@@ -23,6 +23,7 @@ interface ToastState {
   id: string;
   message: string;
   type: 'success' | 'error' | 'screenshot';
+  position?: 'top' | 'bottom';
 }
 
 interface PendingAISubtitle {
@@ -80,8 +81,8 @@ function AppContent() {
   const lastLoadedUrlRef = useRef<string>('');
 
   // -------- Toast --------
-  const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success') => {
-    setToast({ id: Date.now().toString(), message, type });
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'screenshot' = 'success', position: 'top' | 'bottom' = 'top') => {
+    setToast({ id: Date.now().toString(), message, type, position });
   }, []);
 
   const hideToast = useCallback(() => setToast(null), []);
@@ -179,7 +180,7 @@ function AppContent() {
 
   // -------- 截图 --------
   type MarkType = 'none' | 'important' | 'difficult';
-  const handleCaptureScreenshot = async (markType: MarkType = 'none') => {
+  const handleCaptureScreenshot = useCallback(async (markType: MarkType = 'none') => {
     if (!browserRef.current) {
       showToast('浏览器未就绪', 'error');
       return;
@@ -222,7 +223,26 @@ function AppContent() {
     } catch (error: any) {
       showToast(error.message || '截图失败', 'error');
     }
-  };
+  }, [subtitleData, showToast, ipcRenderer]);
+
+  // -------- WCV 快捷键监听 --------
+  useEffect(() => {
+    const handleWcvShortcut = (_event: any, key: string) => {
+      const markTypeMap: Record<string, MarkType> = {
+        's': 'none',
+        'i': 'important',
+        'd': 'difficult'
+      };
+      const markType = markTypeMap[key];
+      if (markType !== undefined) {
+        handleCaptureScreenshot(markType);
+      }
+    };
+    ipcRenderer.on('wcv-shortcut', handleWcvShortcut);
+    return () => {
+      ipcRenderer.removeListener('wcv-shortcut', handleWcvShortcut);
+    };
+  }, [handleCaptureScreenshot]);
 
   // -------- 截图编辑 --------
   const handleEditScreenshot = async (asset: Asset) => {
@@ -307,7 +327,7 @@ function AppContent() {
         onSave={handleSaveEditedScreenshot}
       />
 
-      {toast && <Toast key={toast.id} message={toast.message} type={toast.type} onClose={hideToast} />}
+      {toast && <Toast key={toast.id} message={toast.message} type={toast.type} position={toast.position} onClose={hideToast} />}
 
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => { setIsSettingsOpen(false); ipcRenderer.invoke('wcv-show-active'); }} />
 
