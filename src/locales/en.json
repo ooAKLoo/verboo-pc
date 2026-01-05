@@ -159,7 +159,19 @@
     "prevAsset": "Previous",
     "nextAsset": "Next",
     "urlCopied": "Link copied",
-    "clickToCopy": "Click to copy link"
+    "clickToCopy": "Click to copy link",
+    "displayMode": "Style",
+    "modeOverlay": "Overlay",
+    "modeSeparated": "Separate",
+    "modeCard": "Card",
+    "modeStitch": "Stitch",
+    "separator": "Separator",
+    "separatorWhite": "White",
+    "separatorBlack": "Black",
+    "separatorNone": "None",
+    "separatorWidth": "Width",
+    "cropRatio": "Crop",
+    "cardShowTimestamp": "Show Timestamp"
   },
   "subtitleDialog": {
     "title": "Get Subtitles",

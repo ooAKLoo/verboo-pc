@@ -159,7 +159,19 @@
     "prevAsset": "上一个",
     "nextAsset": "下一个",
     "urlCopied": "链接已复制",
-    "clickToCopy": "点击复制链接"
+    "clickToCopy": "点击复制链接",
+    "displayMode": "样式",
+    "modeOverlay": "叠加",
+    "modeSeparated": "分离",
+    "modeCard": "卡片",
+    "modeStitch": "拼接",
+    "separator": "分隔线",
+    "separatorWhite": "白色",
+    "separatorBlack": "黑色",
+    "separatorNone": "无",
+    "separatorWidth": "宽度",
+    "cropRatio": "裁剪",
+    "cardShowTimestamp": "显示时间戳"
   },
   "subtitleDialog": {
     "title": "获取字幕",

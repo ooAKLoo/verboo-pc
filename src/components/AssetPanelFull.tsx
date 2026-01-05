@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Check, Edit3, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
+import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Check, Edit3, ChevronLeft, ChevronRight, Copy, Layers, CreditCard, GalleryVertical, LayoutTemplate } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
 import { useTranslation } from '../contexts/I18nContext';
+import { ScreenshotRenderer, type DisplayMode, type SeparatorStyle } from '../utils/screenshot';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -263,6 +264,18 @@ function ScreenshotDetailView({
     const [saveMessage, setSaveMessage] = useState<string | null>(null);
     const [loadingSubtitles, setLoadingSubtitles] = useState(true);
 
+    // 显示模式状态
+    const [displayMode, setDisplayMode] = useState<DisplayMode>('overlay');
+    const [stitchSeparator, setStitchSeparator] = useState<SeparatorStyle>('white');
+    const [stitchSeparatorWidth, setStitchSeparatorWidth] = useState(1);
+    const [stitchCropRatio, setStitchCropRatio] = useState(0.10); // 裁剪比例 0%-80%
+
+    // 卡片模式选项（时间戳默认显示）
+    const [cardShowTimestamp, setCardShowTimestamp] = useState(true);
+
+    // 创建渲染器实例
+    const rendererRef = useRef<ScreenshotRenderer | null>(null);
+
     // Track if initial load is complete to avoid auto-save on mount
     const isInitializedRef = useRef(false);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -361,69 +374,7 @@ function ScreenshotDetailView({
         });
     }, [subtitles, screenshotData.timestamp]);
 
-    // Draw subtitles on canvas
-    const drawSubtitles = useCallback((
-        ctx: CanvasRenderingContext2D,
-        subs: SubtitleItem[],
-        width: number,
-        height: number
-    ) => {
-        const fontSize = subtitleStyle.fontSize;
-        const padding = 20;
-        const lineHeight = fontSize * 1.4;
-
-        ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // Calculate total height for bottom position to keep chronological order (early at top)
-        const totalHeight = subs.length * lineHeight;
-
-        let yPosition: number;
-        if (subtitleStyle.position === 'top') {
-            // Top position: start from top, go down
-            yPosition = padding + fontSize / 2;
-        } else {
-            // Bottom position: calculate start position so earliest subtitle is at top of the block
-            // The block ends at (height - padding), so start at (height - padding - totalHeight + lineHeight/2)
-            yPosition = height - padding - totalHeight + lineHeight / 2;
-        }
-
-        subs.forEach((sub) => {
-            const text = sub.text;
-            const textWidth = ctx.measureText(text).width;
-
-            if (subtitleStyle.background !== 'none') {
-                const bgAlpha = subtitleStyle.background === 'semi-transparent' ? 0.75 : 1;
-                ctx.fillStyle = `rgba(0, 0, 0, ${bgAlpha})`;
-
-                const bgPadding = { x: 16, y: 8 };
-                const bgX = width / 2 - textWidth / 2 - bgPadding.x;
-                const bgY = yPosition - fontSize / 2 - bgPadding.y;
-                const bgWidth = textWidth + bgPadding.x * 2;
-                const bgHeight = fontSize + bgPadding.y * 2;
-
-                ctx.beginPath();
-                ctx.roundRect(bgX, bgY, bgWidth, bgHeight, 6);
-                ctx.fill();
-            }
-
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 4;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 1;
-            ctx.fillStyle = 'white';
-            ctx.fillText(text, width / 2, yPosition);
-            ctx.shadowBlur = 0;
-
-            // Always go down for both positions (chronological order preserved)
-            if (subtitleStyle.layout === 'vertical') {
-                yPosition += lineHeight;
-            }
-        });
-    }, [subtitleStyle]);
-
-    // Render canvas
+    // Render canvas with display mode using ScreenshotRenderer
     useEffect(() => {
         if (!canvasRef.current) return;
 
@@ -431,19 +382,41 @@ function ScreenshotDetailView({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
+        // 创建或更新渲染器
+        const cardOptions = {
+            showTimestamp: cardShowTimestamp,
+            timestamp: screenshotData.timestamp
+        };
+
+        if (!rendererRef.current) {
+            rendererRef.current = new ScreenshotRenderer({
+                subtitleStyle,
+                displayMode,
+                stitchSeparator,
+                stitchSeparatorWidth,
+                stitchCropRatio,
+                videoTitle: asset.title,
+                cardOptions
+            });
+        } else {
+            rendererRef.current.updateConfig({
+                subtitleStyle,
+                displayMode,
+                stitchSeparator,
+                stitchSeparatorWidth,
+                stitchCropRatio,
+                videoTitle: asset.title,
+                cardOptions
+            });
+        }
+
         const img = new Image();
         img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-
-            if (selectedSubtitles.length > 0 && subtitles.length > 0) {
-                const selectedSubs = selectedSubtitles.map(i => subtitles[i]).filter(Boolean);
-                drawSubtitles(ctx, selectedSubs, canvas.width, canvas.height);
-            }
+            const selectedSubs = selectedSubtitles.map(i => subtitles[i]).filter(Boolean);
+            rendererRef.current?.render(canvas, ctx, img, selectedSubs);
         };
         img.src = screenshotData.imageData;
-    }, [screenshotData.imageData, selectedSubtitles, subtitles, drawSubtitles]);
+    }, [screenshotData.imageData, selectedSubtitles, subtitles, displayMode, subtitleStyle, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, asset.title, cardShowTimestamp]);
 
     const toggleSubtitle = (index: number) => {
         setSelectedSubtitles(prev =>
@@ -466,9 +439,15 @@ function ScreenshotDetailView({
         const currentSubtitleStyle = subtitleStyleRef.current;
 
         // Create a signature of current state to detect if save is needed
+        // Include display settings to ensure changes trigger saves
         const currentSignature = JSON.stringify({
             selected: currentSelectedSubtitles,
-            style: currentSubtitleStyle
+            style: currentSubtitleStyle,
+            displayMode,
+            stitchSeparator,
+            stitchSeparatorWidth,
+            stitchCropRatio,
+            cardShowTimestamp
         });
 
         // Skip if nothing changed since last save
@@ -525,9 +504,9 @@ function ScreenshotDetailView({
             isSavingRef.current = false;
             setIsSaving(false);
         }
-    }, [asset.id, screenshotData, subtitles, onUpdate, t]);
+    }, [asset.id, screenshotData, subtitles, onUpdate, t, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp]);
 
-    // Auto-save when selectedSubtitles or subtitleStyle changes
+    // Auto-save when selectedSubtitles, subtitleStyle, or display settings change
     useEffect(() => {
         // Skip auto-save on initial load
         if (!isInitializedRef.current) {
@@ -549,7 +528,7 @@ function ScreenshotDetailView({
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [selectedSubtitles, subtitleStyle]);
+    }, [selectedSubtitles, subtitleStyle, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp]);
 
     // Mark as initialized after subtitles are loaded and initial selection is set
     useEffect(() => {
@@ -590,7 +569,18 @@ function ScreenshotDetailView({
                             </span>
                         )}
                         <button
-                            onClick={() => onDownload(asset)}
+                            onClick={() => {
+                                // Download directly from canvas to ensure current display mode is captured
+                                if (canvasRef.current) {
+                                    const imageData = canvasRef.current.toDataURL('image/png');
+                                    const link = document.createElement('a');
+                                    link.href = imageData;
+                                    link.download = `screenshot_${asset.id}_${new Date(asset.createdAt).getTime()}.png`;
+                                    link.click();
+                                } else {
+                                    onDownload(asset);
+                                }
+                            }}
                             className="p-2 hover:bg-zinc-100 rounded-lg transition-colors"
                             title={t('assets.download')}
                         >
@@ -651,7 +641,98 @@ function ScreenshotDetailView({
 
                     {/* Style Settings - Below Image */}
                     {hasSubtitles && (
-                        <div className="mt-4 p-3 bg-[#f8f8f8] rounded-xl">
+                        <div className="mt-4 p-3 bg-[#f8f8f8] rounded-xl space-y-3">
+                            {/* Display Mode Selector - First Row */}
+                            <div className="flex items-center gap-2">
+                                <LayoutTemplate size={12} className="text-zinc-400" />
+                                <span className="text-[11px] text-zinc-500">{t('assets.displayMode')}</span>
+                                <div className="relative grid grid-cols-4 gap-0.5 p-1 bg-white rounded-lg">
+                                    {[
+                                        { value: 'overlay', icon: Layers, labelKey: 'assets.modeOverlay' },
+                                        { value: 'separated', icon: AlignVerticalJustifyStart, labelKey: 'assets.modeSeparated' },
+                                        { value: 'card', icon: CreditCard, labelKey: 'assets.modeCard' },
+                                        { value: 'stitch', icon: GalleryVertical, labelKey: 'assets.modeStitch' }
+                                    ].map((mode, index) => {
+                                        const Icon = mode.icon;
+                                        return (
+                                            <button
+                                                key={mode.value}
+                                                onClick={() => setDisplayMode(mode.value as DisplayMode)}
+                                                className={`relative z-10 flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition-all duration-200 ${
+                                                    displayMode === mode.value
+                                                        ? 'bg-zinc-100 text-zinc-900'
+                                                        : 'text-zinc-500 hover:text-zinc-700'
+                                                }`}
+                                                title={t(mode.labelKey)}
+                                            >
+                                                <Icon size={12} />
+                                                <span className="hidden sm:inline">{t(mode.labelKey)}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+
+                            {/* Stitch Settings - Only show when stitch mode is selected */}
+                            {displayMode === 'stitch' && (
+                                <div className="flex items-center gap-4 pl-5 flex-wrap">
+                                    {/* 裁剪比例 */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-zinc-500">{t('assets.cropRatio')}</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.8}
+                                            step={0.05}
+                                            value={stitchCropRatio}
+                                            onChange={(e) => setStitchCropRatio(Number(e.target.value))}
+                                            className="w-24 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
+                                        />
+                                        <span className="text-[11px] font-mono text-zinc-400 w-8">{Math.round(stitchCropRatio * 100)}%</span>
+                                    </div>
+                                    {/* 分隔线 */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-zinc-500">{t('assets.separator')}</span>
+                                        <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
+                                            {[
+                                                { value: 'white', labelKey: 'assets.separatorWhite' },
+                                                { value: 'black', labelKey: 'assets.separatorBlack' },
+                                                { value: 'none', labelKey: 'assets.separatorNone' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => setStitchSeparator(opt.value as SeparatorStyle)}
+                                                    className={`relative z-10 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 ${
+                                                        stitchSeparator === opt.value
+                                                            ? 'bg-zinc-100 text-zinc-900'
+                                                            : 'text-zinc-500 hover:text-zinc-700'
+                                                    }`}
+                                                >
+                                                    {t(opt.labelKey)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {stitchSeparator !== 'none' && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-zinc-500">{t('assets.separatorWidth')}</span>
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={12}
+                                                step={1}
+                                                value={stitchSeparatorWidth}
+                                                onChange={(e) => setStitchSeparatorWidth(Number(e.target.value))}
+                                                className="w-16 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
+                                            />
+                                            <span className="text-[11px] font-mono text-zinc-400 w-6">{stitchSeparatorWidth}px</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Original Settings - Second Row */}
                             <div className="flex items-center gap-6 flex-wrap">
                                 {/* Font Size */}
                                 <div className="flex items-center gap-2">
@@ -669,67 +750,71 @@ function ScreenshotDetailView({
                                     <span className="text-[11px] font-mono text-zinc-400 w-8">{subtitleStyle.fontSize}px</span>
                                 </div>
 
-                                {/* Position */}
-                                <div className="flex items-center gap-2">
-                                    <AlignVerticalJustifyStart size={12} className="text-zinc-400" />
-                                    <div className="relative grid grid-cols-2 gap-0.5 p-1 bg-white rounded-lg">
-                                        {/* Sliding indicator */}
-                                        <div
-                                            className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
-                                            style={{
-                                                width: 'calc(50% - 6px)',
-                                                left: subtitleStyle.position === 'top' ? '4px' : 'calc(50% + 2px)'
-                                            }}
-                                        />
-                                        {['top', 'bottom'].map((pos) => (
-                                            <button
-                                                key={pos}
-                                                onClick={() => setSubtitleStyle({ ...subtitleStyle, position: pos })}
-                                                className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
-                                                    subtitleStyle.position === pos
-                                                        ? 'text-zinc-900'
-                                                        : 'text-zinc-500 hover:text-zinc-700'
-                                                }`}
-                                            >
-                                                {pos === 'top' ? t('assets.positionTop') : t('assets.positionBottom')}
-                                            </button>
-                                        ))}
+                                {/* Position - Only show for overlay and stitch modes */}
+                                {(displayMode === 'overlay' || displayMode === 'stitch') && (
+                                    <div className="flex items-center gap-2">
+                                        <AlignVerticalJustifyStart size={12} className="text-zinc-400" />
+                                        <div className="relative grid grid-cols-2 gap-0.5 p-1 bg-white rounded-lg">
+                                            {/* Sliding indicator */}
+                                            <div
+                                                className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                                style={{
+                                                    width: 'calc(50% - 6px)',
+                                                    left: subtitleStyle.position === 'top' ? '4px' : 'calc(50% + 2px)'
+                                                }}
+                                            />
+                                            {['top', 'bottom'].map((pos) => (
+                                                <button
+                                                    key={pos}
+                                                    onClick={() => setSubtitleStyle({ ...subtitleStyle, position: pos })}
+                                                    className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
+                                                        subtitleStyle.position === pos
+                                                            ? 'text-zinc-900'
+                                                            : 'text-zinc-500 hover:text-zinc-700'
+                                                    }`}
+                                                >
+                                                    {pos === 'top' ? t('assets.positionTop') : t('assets.positionBottom')}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Background */}
-                                <div className="flex items-center gap-2">
-                                    <Palette size={12} className="text-zinc-400" />
-                                    <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
-                                        {/* Sliding indicator */}
-                                        <div
-                                            className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
-                                            style={{
-                                                width: 'calc(33.333% - 4px)',
-                                                left: subtitleStyle.background === 'semi-transparent' ? '4px'
-                                                    : subtitleStyle.background === 'solid' ? 'calc(33.333% + 2px)'
-                                                    : 'calc(66.666%)'
-                                            }}
-                                        />
-                                        {[
-                                            { value: 'semi-transparent', labelKey: 'assets.bgSemiTransparent' },
-                                            { value: 'solid', labelKey: 'assets.bgSolid' },
-                                            { value: 'none', labelKey: 'assets.bgNone' }
-                                        ].map((opt) => (
-                                            <button
-                                                key={opt.value}
-                                                onClick={() => setSubtitleStyle({ ...subtitleStyle, background: opt.value })}
-                                                className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
-                                                    subtitleStyle.background === opt.value
-                                                        ? 'text-zinc-900'
-                                                        : 'text-zinc-500 hover:text-zinc-700'
-                                                }`}
-                                            >
-                                                {t(opt.labelKey)}
-                                            </button>
-                                        ))}
+                                {/* Background - Only show for overlay and stitch modes */}
+                                {(displayMode === 'overlay' || displayMode === 'stitch') && (
+                                    <div className="flex items-center gap-2">
+                                        <Palette size={12} className="text-zinc-400" />
+                                        <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
+                                            {/* Sliding indicator */}
+                                            <div
+                                                className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                                style={{
+                                                    width: 'calc(33.333% - 4px)',
+                                                    left: subtitleStyle.background === 'semi-transparent' ? '4px'
+                                                        : subtitleStyle.background === 'solid' ? 'calc(33.333% + 2px)'
+                                                        : 'calc(66.666%)'
+                                                }}
+                                            />
+                                            {[
+                                                { value: 'semi-transparent', labelKey: 'assets.bgSemiTransparent' },
+                                                { value: 'solid', labelKey: 'assets.bgSolid' },
+                                                { value: 'none', labelKey: 'assets.bgNone' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => setSubtitleStyle({ ...subtitleStyle, background: opt.value })}
+                                                    className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
+                                                        subtitleStyle.background === opt.value
+                                                            ? 'text-zinc-900'
+                                                            : 'text-zinc-500 hover:text-zinc-700'
+                                                    }`}
+                                                >
+                                                    {t(opt.labelKey)}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -1254,28 +1339,34 @@ export function AssetPanelFull({ onClose, refreshTrigger = 0, onEditScreenshot }
                             </div>
                         )}
 
-                        {/* Subtitle Section - Clickable for Edit */}
+                        {/* Subtitle Section - 参照 subtitle-display.html 设计 */}
                         {isScreenshot && screenshotData?.selectedSubtitles && screenshotData.selectedSubtitles.length > 0 && (
                             <div
-                                className={`mb-5 p-4 bg-zinc-50 rounded-xl ${onEditScreenshot ? 'cursor-pointer hover:bg-blue-50/50 transition-colors group' : ''}`}
+                                className={`mb-5 py-6 px-8 bg-zinc-50 rounded-xl ${onEditScreenshot ? 'cursor-pointer hover:bg-blue-50/30 transition-colors group' : ''}`}
                                 onClick={handleImageClick}
                             >
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t('assets.labelSubtitle')}</span>
-                                    {onEditScreenshot && (
+                                {/* 字幕块：左侧装饰条 + 文本 */}
+                                <div className="flex gap-5">
+                                    {/* 左侧装饰条 */}
+                                    <div className="w-[3px] bg-zinc-200 rounded-full flex-shrink-0" />
+                                    {/* 字幕文本区 */}
+                                    <div className="flex-1 space-y-0">
+                                        {screenshotData.selectedSubtitles.map((sub, index) => (
+                                            <p key={index} className="text-[17px] text-zinc-600 leading-[2] font-normal">
+                                                {sub.text}
+                                            </p>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* 编辑提示 */}
+                                {onEditScreenshot && (
+                                    <div className="mt-4 flex justify-end">
                                         <span className="text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                                             <Edit3 size={12} />
                                             {t('assets.clickToEdit')}
                                         </span>
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    {screenshotData.selectedSubtitles.map((sub, index) => (
-                                        <p key={index} className="text-sm text-zinc-700 leading-relaxed">
-                                            {sub.text}
-                                        </p>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

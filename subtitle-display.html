@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字幕展示</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            background: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-frame {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,0.3);
+            font-size: 14px;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 32px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .subtitle-block {
+            display: flex;
+            gap: 20px;
+        }
+
+        .accent-bar {
+            width: 3px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .subtitle-text {
+            font-size: 17px;
+            line-height: 2;
+            color: #444;
+            font-weight: 400;
+        }
+
+        .subtitle-text p {
+            margin: 0;
+        }
+
+        .meta-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding-top: 40px;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #bbb;
+        }
+
+        .divider {
+            color: #ddd;
+            font-size: 12px;
+        }
+
+        .video-title {
+            font-size: 12px;
+            color: #bbb;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .video-title .avatar {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <div class="video-frame">
+        [ 视频画面 ]
+    </div>
+
+    <div class="content-area">
+        <div class="subtitle-block">
+            <div class="accent-bar"></div>
+            <div class="subtitle-text">
+                <p>所以我确实觉得</p>
+                <p>其实小朋友去一个竞争特别激烈的环境</p>
+                <p>就是尤其是我那时候没有那么懂事的</p>
+                <p>一个小朋友</p>
+                <p>其实不一定是件好事</p>
+            </div>
+        </div>
+
+        <div class="meta-row">
+            <span class="video-title">
+                <img class="avatar" src="/Users/yangdongju/Downloads/be8407fc55e47132912b11efabffa54209d203c4.jpg@96w_96h_1c_1s_!web-avatar.avif" alt="avatar">
+                【正片】何同学x罗永浩！青年何同学的骄傲与烦恼
+            </span>
+            <span class="divider">|</span>
+            <span class="timestamp">48:33</span>
+        </div>
+    </div>
+</body>
+</html>
