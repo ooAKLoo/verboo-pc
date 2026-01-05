@@ -137,7 +137,6 @@ export function Sidebar({
         isWelcomeVisible,
         // 方法
         setInputUrl,
-        navigate,
         navigateToUrl,
         goBack,
         goForward,
@@ -349,7 +348,7 @@ export function Sidebar({
                         </button>
                     </div>
 
-                    <form onSubmit={navigate} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
+                    <form onSubmit={(e) => { e.preventDefault(); navigateToUrl(inputUrl); }} className="flex-1 flex items-center border-l border-gray-200 pl-3 ml-1">
                         <input
                             type="text"
                             value={inputUrl}

@@ -33,7 +33,6 @@ interface AppContextValue {
 
   // -------- 导航操作 --------
   setInputUrl: (url: string) => void;
-  navigate: (e: React.FormEvent) => void;
   navigateToUrl: (url: string, seekTo?: number) => Promise<void>;
   goBack: () => void;
   goForward: () => void;
@@ -138,11 +137,6 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
   const setInputUrl = useCallback((url: string) => {
     browserRef.current?.setInputUrl(url);
   }, []);
-
-  const navigate = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    browserRef.current?.navigate(navState.inputUrl);
-  }, [navState.inputUrl]);
 
   const goBack = useCallback(() => {
     browserRef.current?.goBack();
@@ -266,7 +260,6 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
 
     // 导航操作
     setInputUrl,
-    navigate,
     navigateToUrl,
     goBack,
     goForward,
