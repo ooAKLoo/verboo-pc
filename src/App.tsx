@@ -78,6 +78,7 @@ function AppContent() {
   const [materialRefreshTrigger, setMaterialRefreshTrigger] = useState(0);
   const [subtitleMarks, setSubtitleMarks] = useState<Array<{ timestamp: number; markType: 'important' | 'difficult' }>>([]);
   const [pendingAISubtitle, setPendingAISubtitle] = useState<PendingAISubtitle | null>(null);
+  const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
   const lastLoadedUrlRef = useRef<string>('');
 
   // -------- Toast --------
@@ -244,6 +245,17 @@ function AppContent() {
     };
   }, [handleCaptureScreenshot]);
 
+  // -------- 视频全屏状态监听 --------
+  useEffect(() => {
+    const handleFullscreenChange = (_event: any, isFullscreen: boolean) => {
+      setIsVideoFullscreen(isFullscreen);
+    };
+    ipcRenderer.on('wcv-fullscreen-change', handleFullscreenChange);
+    return () => {
+      ipcRenderer.removeListener('wcv-fullscreen-change', handleFullscreenChange);
+    };
+  }, []);
+
   // -------- 截图编辑 --------
   const handleEditScreenshot = async (asset: Asset) => {
     pauseVideo();
@@ -347,30 +359,32 @@ function AppContent() {
         </div>
       )}
 
-      {/* 标题栏 */}
-      <div className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-        <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <button onClick={toggleLeftPanel} className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all">
-            <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
-          </button>
-        </div>
-        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          {hasNavigated && (
+      {/* 标题栏 - 全屏时隐藏 */}
+      {!isVideoFullscreen && (
+        <div className="fixed top-0 left-0 right-0 h-[52px] flex items-center justify-between px-4 z-50" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+          <div className="flex items-center" style={{ marginLeft: '70px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <button onClick={toggleLeftPanel} className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all">
+              <PanelLeft size={16} className={leftCollapsed ? "opacity-50" : "opacity-100"} />
+            </button>
+          </div>
+          <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            {hasNavigated && (
+              <button
+                onClick={() => viewMode !== 'browser' ? closePanel() : toggleRightPanel()}
+                className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
+              >
+                <PanelRight size={16} className={(rightCollapsed && viewMode === 'browser') ? "opacity-50" : "opacity-100"} />
+              </button>
+            )}
             <button
-              onClick={() => viewMode !== 'browser' ? closePanel() : toggleRightPanel()}
+              onClick={() => { ipcRenderer.invoke('wcv-hide-all'); setIsSettingsOpen(true); }}
               className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
             >
-              <PanelRight size={16} className={(rightCollapsed && viewMode === 'browser') ? "opacity-50" : "opacity-100"} />
+              <Settings size={16} />
             </button>
-          )}
-          <button
-            onClick={() => { ipcRenderer.invoke('wcv-hide-all'); setIsSettingsOpen(true); }}
-            className="p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md transition-all"
-          >
-            <Settings size={16} />
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 布局 */}
       <Layout
@@ -379,6 +393,7 @@ function AppContent() {
         learningMode={viewMode === 'learning'}
         assetMode={viewMode === 'asset'}
         subtitleMode={viewMode === 'subtitle'}
+        isVideoFullscreen={isVideoFullscreen}
         left={
           <Sidebar
             onOpenSubtitleDialog={() => { pauseVideo(); ipcRenderer.invoke('wcv-hide-all'); setIsSubtitleDialogOpen(true); }}

@@ -13,11 +13,12 @@ interface LayoutProps {
     learningMode?: boolean;
     assetMode?: boolean;
     subtitleMode?: boolean;
+    isVideoFullscreen?: boolean;
 }
 
 const MIN_RIGHT_WIDTH = 100;
 
-export function Layout({ left, main, right, learning, asset, subtitle, leftCollapsed, rightCollapsed, learningMode, assetMode, subtitleMode }: LayoutProps) {
+export function Layout({ left, main, right, learning, asset, subtitle, leftCollapsed, rightCollapsed, learningMode, assetMode, subtitleMode, isVideoFullscreen }: LayoutProps) {
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizing, setIsResizing] = useState(false);
     const lastXRef = useRef(0);
@@ -61,43 +62,49 @@ export function Layout({ left, main, right, learning, asset, subtitle, leftColla
     }, [isResizing]);
 
     return (
-        <div className="flex w-screen overflow-hidden p-3 pt-[52px]" style={{ backgroundColor: '#f5f5f5', height: '100vh' }}>
+        <div
+            className={`flex w-screen overflow-hidden ${isVideoFullscreen ? 'p-0' : 'p-3 pt-[52px]'}`}
+            style={{ backgroundColor: isVideoFullscreen ? '#000' : '#f5f5f5', height: '100vh' }}
+        >
             {/* Left Sidebar - Floating Card */}
             <div
-                className={`transition-all duration-300 ease-in-out floating-card overflow-hidden ${leftCollapsed ? 'w-0 opacity-0 p-0 mr-0' : 'w-64 opacity-100 mr-3'
-                    }`}
+                className={`transition-all duration-300 ease-in-out floating-card overflow-hidden ${
+                    isVideoFullscreen ? 'hidden' : leftCollapsed ? 'w-0 opacity-0 p-0 mr-0' : 'w-64 opacity-100 mr-3'
+                }`}
             >
                 {left}
             </div>
 
-            {/* Panel Modes - Full width panel */}
-            {learningMode && (
+            {/* Panel Modes - Full width panel (hidden in fullscreen) */}
+            {learningMode && !isVideoFullscreen && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {learning}
                 </div>
             )}
-            {assetMode && (
+            {assetMode && !isVideoFullscreen && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {asset}
                 </div>
             )}
-            {subtitleMode && (
+            {subtitleMode && !isVideoFullscreen && (
                 <div className="flex-1 flex flex-col min-w-0 relative floating-card overflow-hidden">
                     {subtitle}
                 </div>
             )}
 
-            {/* Main Content - 始终存在，panel 模式时隐藏 */}
+            {/* Main Content - 始终存在，panel 模式时隐藏，全屏时始终显示 */}
             <div
-                className={`flex-1 flex flex-col min-w-0 relative floating-card bg-dot-grid overflow-hidden ${
-                    learningMode || assetMode || subtitleMode ? 'hidden' : ''
+                className={`flex-1 flex flex-col min-w-0 relative overflow-hidden ${
+                    isVideoFullscreen ? '' : 'floating-card bg-dot-grid'
+                } ${
+                    !isVideoFullscreen && (learningMode || assetMode || subtitleMode) ? 'hidden' : ''
                 }`}
             >
                 {main}
             </div>
 
             {/* Resizer - iPad 风格拖拽条 */}
-            {!rightCollapsed && !learningMode && !assetMode && !subtitleMode && (
+            {!isVideoFullscreen && !rightCollapsed && !learningMode && !assetMode && !subtitleMode && (
                 <div
                     className="flex items-center justify-center flex-shrink-0 cursor-col-resize group w-3 mx-0"
                     onMouseDown={handleMouseDown}
@@ -112,7 +119,7 @@ export function Layout({ left, main, right, learning, asset, subtitle, leftColla
             )}
 
             {/* Right Sidebar - Floating Card */}
-            {!learningMode && !assetMode && !subtitleMode && (
+            {!isVideoFullscreen && !learningMode && !assetMode && !subtitleMode && (
                 <div
                     className={`transition-opacity duration-300 ease-in-out floating-card z-20 overflow-hidden ${rightCollapsed ? 'w-0 opacity-0 p-0' : 'opacity-100'
                         }`}

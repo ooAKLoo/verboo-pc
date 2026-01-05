@@ -96,6 +96,8 @@ let mainWindow = null;
 let activeTabId = null;
 // View bounds (will be updated by renderer)
 let viewBounds = { x: 0, y: 0, width: 800, height: 600 };
+// Track fullscreen state
+let isHtmlFullscreen = false;
 /**
  * Create a new WebContentsView for a tab
  */
@@ -241,6 +243,43 @@ function setupViewEventHandlers(tabId, view) {
             mainWindow?.webContents.send('wcv-shortcut', key);
         }
     });
+    // Handle HTML5 fullscreen events (video player fullscreen)
+    webContents.on('enter-html-full-screen', () => {
+        console.log('[Main] Enter HTML fullscreen');
+        isHtmlFullscreen = true;
+        // Notify renderer first to update layout
+        mainWindow?.webContents.send('wcv-fullscreen-change', true);
+        // Use setTimeout to ensure bounds update after layout change
+        setTimeout(() => {
+            const currentView = webContentsViews.get(tabId);
+            if (currentView && mainWindow) {
+                const [width, height] = mainWindow.getContentSize();
+                console.log('[Main] Setting fullscreen bounds:', { width, height });
+                currentView.setBounds({ x: 0, y: 0, width, height });
+                // Remove border radius in fullscreen
+                if (typeof currentView.setBorderRadius === 'function') {
+                    currentView.setBorderRadius(0);
+                }
+            }
+        }, 50);
+    });
+    webContents.on('leave-html-full-screen', () => {
+        console.log('[Main] Leave HTML fullscreen');
+        isHtmlFullscreen = false;
+        // Notify renderer to show UI elements
+        mainWindow?.webContents.send('wcv-fullscreen-change', false);
+        // Use setTimeout to ensure bounds update after layout change
+        setTimeout(() => {
+            const currentView = webContentsViews.get(tabId);
+            if (currentView) {
+                currentView.setBounds(viewBounds);
+                // Restore border radius
+                if (typeof currentView.setBorderRadius === 'function') {
+                    currentView.setBorderRadius(16);
+                }
+            }
+        }, 50);
+    });
 }
 /**
  * Destroy a WebContentsView
@@ -269,6 +308,10 @@ function switchActiveTab(tabId) {
  */
 function updateViewBounds(bounds) {
     viewBounds = bounds;
+    // Don't update bounds if in fullscreen mode
+    if (isHtmlFullscreen) {
+        return;
+    }
     // Update all views' bounds
     for (const view of webContentsViews.values()) {
         view.setBounds(bounds);
