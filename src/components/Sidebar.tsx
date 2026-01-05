@@ -210,6 +210,7 @@ export function Sidebar({
 
                 {/* Always visible - Learning & Library section */}
                 <div className="flex flex-col gap-1">
+                    {/* 英语学习入口 - 暂时隐藏
                     <div
                         onClick={() => switchView('learning')}
                         className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150 ${
@@ -219,6 +220,7 @@ export function Sidebar({
                         <BookOpen size={14} className={isLearningActive ? 'text-[#18181b]' : 'text-gray-400'} />
                         <span className={`text-[13px] font-medium ${isLearningActive ? 'text-[#18181b]' : 'text-gray-500'}`}>{t('sidebar.learning')}</span>
                     </div>
+                    */}
 
                     <div
                         onClick={() => switchView('asset')}
