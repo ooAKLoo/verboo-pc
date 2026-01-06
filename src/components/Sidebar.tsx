@@ -292,10 +292,10 @@ export function Sidebar({
             </div>
 
             {/* Recent Sites */}
-            {recentSites.length > 0 && (
+            {recentSites.some(site => site.lastPosition && site.lastPosition > 0) && (
                 <div className="px-2 pb-2 overflow-hidden">
                     <div className="flex flex-col gap-1.5 w-full">
-                        {recentSites.map((site, index) => (
+                        {recentSites.filter(site => site.lastPosition && site.lastPosition > 0).map((site, index) => (
                             <button
                                 key={index}
                                 onClick={() => navigateToUrl(site.url, site.lastPosition)}
