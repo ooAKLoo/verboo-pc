@@ -27,9 +27,11 @@ interface InfoPanelProps {
     subtitleMarks?: SubtitleMark[];
     // Current video URL for filtering assets
     currentUrl?: string;
+    // Seek video to specific time
+    onSeekTo?: (time: number) => void;
 }
 
-export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [], currentUrl, materialRefreshTrigger }: InfoPanelProps) {
+export function InfoPanel({ data, currentVideoTime = 0, subtitleMarks = [], currentUrl, materialRefreshTrigger, onSeekTo }: InfoPanelProps) {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<TabType>('subtitle');
     const [videoAssets, setVideoAssets] = useState<Asset[]>([]);
@@ -299,7 +301,14 @@ ${subtitleText}
                                 <div
                                     key={index}
                                     ref={(el) => { itemRefs.current[index] = el; }}
-                                    className={`group px-4 py-2.5 transition-all duration-200 cursor-default ${
+                                    onClick={() => {
+                                        if (item.start !== undefined && onSeekTo) {
+                                            onSeekTo(item.start);
+                                        }
+                                    }}
+                                    className={`group px-4 py-2.5 transition-all duration-200 ${
+                                        item.start !== undefined && onSeekTo ? 'cursor-pointer' : 'cursor-default'
+                                    } ${
                                         mark === 'important'
                                             ? 'bg-amber-50/70 border-l-2 border-amber-400'
                                             : mark === 'difficult'
@@ -413,7 +422,14 @@ ${subtitleText}
                                 return (
                                     <div
                                         key={asset.id}
-                                        className="group relative bg-[#fafafa] rounded-lg overflow-hidden hover:bg-[#f4f4f5] transition-colors"
+                                        onClick={() => {
+                                            if (onSeekTo && typeData.timestamp !== undefined) {
+                                                onSeekTo(typeData.timestamp);
+                                            }
+                                        }}
+                                        className={`group relative bg-[#fafafa] rounded-lg overflow-hidden hover:bg-[#f4f4f5] transition-colors ${
+                                            onSeekTo ? 'cursor-pointer' : ''
+                                        }`}
                                     >
                                         {/* Thumbnail */}
                                         <div className="flex gap-3 p-2">

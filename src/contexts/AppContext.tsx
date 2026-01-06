@@ -40,6 +40,7 @@ interface AppContextValue {
 
   // -------- 视频控制 --------
   pauseVideo: () => void;
+  seekVideo: (time: number) => void;
 
   // -------- 内部使用（BrowserView 绑定） --------
   browserRef: React.RefObject<BrowserViewHandle | null>;
@@ -157,6 +158,16 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
     );
   }, []);
 
+  const seekVideo = useCallback((time: number) => {
+    // 切换到 browser 模式并跳转到指定时间
+    if (viewMode !== 'browser') {
+      setViewMode('browser');
+    }
+    browserRef.current?.executeScript(
+      `(function(){ const v = document.querySelector('video'); if(v) { v.currentTime = ${time}; v.play(); } })()`
+    );
+  }, [viewMode]);
+
   // -------- 核心：统一的导航方法 --------
   const navigateToUrl = useCallback(async (url: string, seekTo?: number) => {
     // 规范化 URL
@@ -267,6 +278,7 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
 
     // 视频控制
     pauseVideo,
+    seekVideo,
 
     // 内部使用
     browserRef,

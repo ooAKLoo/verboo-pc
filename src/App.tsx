@@ -59,6 +59,7 @@ function AppContent() {
     pendingSeekRef,
     navigateToUrl,
     pauseVideo,
+    seekVideo,
   } = useApp();
 
   // 调试日志
@@ -435,6 +436,7 @@ function AppContent() {
             onCloseEnglishLearning={() => setShowEnglishLearning(false)}
             subtitleMarks={subtitleMarks}
             currentUrl={currentUrl}
+            onSeekTo={seekVideo}
           />
         }
         learning={<LearningPanel onClose={closePanel} />}
