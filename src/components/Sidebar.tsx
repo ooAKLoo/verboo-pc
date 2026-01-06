@@ -242,8 +242,8 @@ export function Sidebar({
                     </div>
                 </div>
 
-                {/* Video-related controls */}
-                {!isWelcomeVisible && currentUrl && !currentUrl.startsWith('about:') && (
+                {/* Video-related controls - 只在 browser 模式下显示，素材库/字幕库面板打开时隐藏 */}
+                {!isWelcomeVisible && currentUrl && !currentUrl.startsWith('about:') && viewMode === 'browser' && (
                     <>
                         <div className="h-px bg-[#e4e4e7] mx-3 my-2" />
 
