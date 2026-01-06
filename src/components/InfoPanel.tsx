@@ -253,7 +253,8 @@ ${subtitleText}
                             )}
                             {/* Action Buttons */}
                             <div className="flex items-center gap-1">
-                                {Array.isArray(data) && data.length > 0 && (
+                                {/* AI学习功能暂时隐藏
+                            {Array.isArray(data) && data.length > 0 && (
                                     <>
                                         <button
                                             onClick={copyToPrompt}
@@ -270,6 +271,7 @@ ${subtitleText}
                                         <div className="w-px h-4 bg-[#e4e4e7] mx-1" />
                                     </>
                                 )}
+                            */}
                                 <button
                                     onClick={() => setAutoScroll(!autoScroll)}
                                     className={`h-8 px-2.5 text-[12px] font-medium rounded-md transition-all duration-150 ${
