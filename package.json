@@ -1,6 +1,11 @@
 {
   "name": "verboo",
   "productName": "Verboo",
+  "description": "Verboo - Video Learning Assistant",
+  "author": {
+    "name": "ooAKLoo",
+    "email": "ooakloo@users.noreply.github.com"
+  },
   "private": true,
   "version": "0.2.0",
   "main": "dist-electron/main.js",
