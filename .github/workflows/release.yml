@@ -6,6 +6,63 @@ on:
       - 'v*'
 
 jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 导入 Apple 证书
+      - name: Import Code Signing Certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # 创建临时 keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # 创建 keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # 导入证书
+          echo "$CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          # 设置 keychain 为默认
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # 允许 codesign 访问
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build macOS
+        env:
+          # 公证需要的环境变量
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run build && npx electron-builder --mac --publish never
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
+
   build-windows:
     runs-on: windows-latest
     steps:
@@ -62,7 +119,7 @@ jobs:
             release/latest-linux.yml
 
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-mac, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,6 +135,8 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.blockmap
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
             artifacts/**/*.AppImage
             artifacts/**/*.deb
             artifacts/**/*.rpm
