@@ -142,6 +142,6 @@ jobs:
             artifacts/**/*.rpm
             artifacts/**/latest*.yml
           generate_release_notes: true
-          draft: true
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
