@@ -68,9 +68,25 @@ function initUpdater(win) {
         });
     });
     electron_updater_1.autoUpdater.on('error', (error) => {
+        // 记录完整错误到日志
+        electron_log_1.default.error('[Updater] Error:', error);
+        // 转换为用户友好的错误信息
+        let userFriendlyError = '检查更新失败，请稍后重试';
+        if (error.message.includes('404') || error.message.includes('Cannot find')) {
+            // 更新文件不存在（常见于新版本刚发布时）
+            userFriendlyError = '暂无可用更新';
+        }
+        else if (error.message.includes('net::') || error.message.includes('ENOTFOUND')) {
+            // 网络错误
+            userFriendlyError = '网络连接失败，请检查网络后重试';
+        }
+        else if (error.message.includes('ETIMEDOUT') || error.message.includes('timeout')) {
+            // 超时
+            userFriendlyError = '连接超时，请稍后重试';
+        }
         sendUpdateStatus({
             status: 'error',
-            error: error.message
+            error: userFriendlyError
         });
     });
     // IPC 处理器

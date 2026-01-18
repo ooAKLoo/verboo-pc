@@ -1,39 +1,16 @@
 /**
  * 数据分析服务
- * 集成 PostHog 进行用户行为分析
+ * 使用 Orbit SDK 进行日活和下载量追踪
  * 集成 Sentry 进行错误监控
  */
 
-// PostHog 配置
-const POSTHOG_KEY = 'phc_O5X1ifMMwpN4HFSL8JYRUcHJzLwloDmosy5kaA4c4Y6';
-const POSTHOG_HOST = 'https://us.i.posthog.com';
+import { Orbit } from '@ooakloowj/orbit';
 
 // Sentry 配置
 const SENTRY_DSN = ''; // TODO: 填入你的 Sentry DSN
 
 // 用户偏好设置 key
 const ANALYTICS_ENABLED_KEY = 'verboo_analytics_enabled';
-const USER_ID_KEY = 'verboo_user_id';
-const FIRST_LAUNCH_KEY = 'verboo_first_launch_tracked';
-const INSTALL_DATE_KEY = 'verboo_install_date';
-
-// 获取唯一用户 ID（使用更稳定的生成策略）
-function getOrCreateUserId(): { userId: string; isNew: boolean } {
-    let userId = localStorage.getItem(USER_ID_KEY);
-    const isNew = !userId;
-
-    if (!userId) {
-        // 使用时间戳 + 随机数组合，确保唯一性
-        const timestamp = Date.now().toString(36);
-        const random = Math.random().toString(36).substring(2, 10);
-        userId = `u_${timestamp}_${random}`;
-        localStorage.setItem(USER_ID_KEY, userId);
-        // 记录安装日期
-        localStorage.setItem(INSTALL_DATE_KEY, new Date().toISOString().split('T')[0]);
-    }
-
-    return { userId, isNew };
-}
 
 // 检查是否启用分析
 export function isAnalyticsEnabled(): boolean {
@@ -46,132 +23,78 @@ export function isAnalyticsEnabled(): boolean {
 export function setAnalyticsEnabled(enabled: boolean): void {
     localStorage.setItem(ANALYTICS_ENABLED_KEY, String(enabled));
     if (!enabled) {
-        // 如果禁用，可以在这里重置 PostHog
         console.log('[Analytics] Disabled');
     }
 }
 
-// PostHog 简易实现（不依赖 SDK，使用 API）
+// Orbit 分析服务
 class AnalyticsService {
-    private userId: string;
-    private sessionId: string;
-    private initialized: boolean = false;
-    private isNewUser: boolean = false;
+    private configured: boolean = false;
 
-    constructor() {
-        const { userId, isNew } = getOrCreateUserId();
-        this.userId = userId;
-        this.isNewUser = isNew;
-        this.sessionId = `s_${Date.now().toString(36)}`;
+    /**
+     * 确保 Orbit SDK 已配置
+     */
+    private ensureConfigured() {
+        if (this.configured) return;
+
+        Orbit.configure({
+            appId: 'com.dongju.verboo',
+        });
+
+        this.configured = true;
+        console.log('[Analytics] Orbit SDK configured');
     }
 
     /**
-     * 初始化分析服务
+     * 初始化分析服务（日活追踪等）
      */
     init() {
-        if (this.initialized) return;
-
-        // 只有配置了 key 且用户允许才初始化
-        if (!POSTHOG_KEY || !isAnalyticsEnabled()) {
-            console.log('[Analytics] Not initialized (disabled or no key)');
+        // 只有用户允许才启用分析追踪
+        if (!isAnalyticsEnabled()) {
+            console.log('[Analytics] Analytics tracking disabled by user');
             return;
         }
 
-        this.initialized = true;
-        console.log('[Analytics] Initialized');
+        this.ensureConfigured();
+        console.log('[Analytics] Analytics tracking enabled');
 
-        const commonProps = {
-            platform: this.getPlatform(),
-            version: this.getAppVersion(),
-            locale: navigator.language,
-        };
-
-        // 首次启动事件（用于追踪下载量）
-        if (this.isNewUser && !localStorage.getItem(FIRST_LAUNCH_KEY)) {
-            this.capture('first_launch', {
-                ...commonProps,
-                install_date: localStorage.getItem(INSTALL_DATE_KEY),
-            });
-            localStorage.setItem(FIRST_LAUNCH_KEY, 'true');
-        }
-
-        // 每次启动事件（用于 DAU 计算）
-        this.capture('app_started', commonProps);
+        // ✅ 下载量和日活会自动追踪，无需额外代码
     }
 
     /**
-     * 记录事件
+     * 检查版本更新
      */
-    capture(event: string, properties?: Record<string, any>) {
-        if (!isAnalyticsEnabled() || !POSTHOG_KEY) return;
+    async checkUpdate() {
+        this.ensureConfigured();
 
-        const payload = {
-            api_key: POSTHOG_KEY,
-            event,
-            properties: {
-                distinct_id: this.userId,
-                $session_id: this.sessionId,
-                ...properties,
-            },
-            timestamp: new Date().toISOString(),
-        };
-
-        // 使用 beacon API 发送（不阻塞）
-        if (navigator.sendBeacon) {
-            navigator.sendBeacon(
-                `${POSTHOG_HOST}/capture/`,
-                JSON.stringify(payload)
-            );
-        } else {
-            fetch(`${POSTHOG_HOST}/capture/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                keepalive: true,
-            }).catch(() => { });
-        }
-    }
-
-    /**
-     * 记录页面访问
-     */
-    pageView(pageName: string) {
-        this.capture('$pageview', { $current_url: pageName });
-    }
-
-    /**
-     * 记录功能使用
-     */
-    trackFeature(feature: string, details?: Record<string, any>) {
-        this.capture('feature_used', { feature, ...details });
-    }
-
-    /**
-     * 获取平台信息
-     */
-    private getPlatform(): string {
-        const platform = navigator.platform.toLowerCase();
-        if (platform.includes('mac')) return 'macOS';
-        if (platform.includes('win')) return 'Windows';
-        if (platform.includes('linux')) return 'Linux';
-        return platform;
-    }
-
-    /**
-     * 获取应用版本
-     */
-    private getAppVersion(): string {
         try {
-            const { ipcRenderer } = window.require('electron');
-            // 这是异步的，首次可能返回 unknown
-            ipcRenderer.invoke('get-app-version').then((result: any) => {
-                if (result.success) {
-                    localStorage.setItem('verboo_app_version', result.version);
-                }
+            const result = await Orbit.checkUpdate();
+            return result;
+        } catch (error) {
+            console.error('[Analytics] Check update failed:', error);
+            return { hasUpdate: false };
+        }
+    }
+
+    /**
+     * 发送用户反馈
+     */
+    async sendFeedback(content: string, contact?: string) {
+        console.log('[Analytics] sendFeedback called:', { content, contact });
+
+        this.ensureConfigured();
+
+        try {
+            console.log('[Analytics] Calling Orbit.sendFeedback...');
+            const result = await Orbit.sendFeedback({
+                content,
+                contact,
             });
-            return localStorage.getItem('verboo_app_version') || 'unknown';
-        } catch {
-            return 'unknown';
+            console.log('[Analytics] Orbit.sendFeedback result:', result);
+            return true;
+        } catch (error) {
+            console.error('[Analytics] Send feedback failed:', error);
+            return false;
         }
     }
 }

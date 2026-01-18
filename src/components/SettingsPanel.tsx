@@ -4,7 +4,6 @@ import {
     Download,
     Check,
     Loader2,
-    ExternalLink,
     MessageSquare,
     BarChart3,
     Info,
@@ -12,20 +11,23 @@ import {
     ChevronRight,
     Globe
 } from 'lucide-react';
-import { isAnalyticsEnabled, setAnalyticsEnabled } from '../services/analytics';
+import { isAnalyticsEnabled, setAnalyticsEnabled, analytics } from '../services/analytics';
 import { useTranslation, type Locale } from '../contexts/I18nContext';
+import { FeedbackDialog } from './FeedbackDialog';
 
 interface SettingsPanelProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
+type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'error';
 
 interface UpdateState {
     status: UpdateStatus;
     version?: string;
-    progress?: number;
+    releaseNotes?: string;
+    downloadUrl?: string;
+    forceUpdate?: boolean;
     error?: string;
 }
 
@@ -36,6 +38,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     const [appVersion, setAppVersion] = useState('');
     const [analyticsOn, setAnalyticsOn] = useState(isAnalyticsEnabled());
     const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' });
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
 
     // 获取应用版本
     useEffect(() => {
@@ -46,46 +49,39 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         });
     }, [ipcRenderer]);
 
-    // 监听更新状态
-    useEffect(() => {
-        const handleUpdateStatus = (_event: any, info: UpdateState) => {
-            setUpdateState(info);
-        };
-
-        ipcRenderer.on('update-status', handleUpdateStatus);
-        return () => {
-            ipcRenderer.removeListener('update-status', handleUpdateStatus);
-        };
-    }, [ipcRenderer]);
-
-    // 检查更新
+    // 检查更新 (使用 Orbit SDK)
     const handleCheckUpdate = useCallback(async () => {
         setUpdateState({ status: 'checking' });
         try {
-            await ipcRenderer.invoke('check-for-updates');
+            const result = await analytics.checkUpdate();
+            if (result.hasUpdate) {
+                setUpdateState({
+                    status: 'available',
+                    version: result.latestVersion,
+                    releaseNotes: result.releaseNotes,
+                    downloadUrl: result.downloadUrl,
+                    forceUpdate: result.forceUpdate,
+                });
+            } else {
+                setUpdateState({ status: 'not-available' });
+            }
         } catch (error) {
             setUpdateState({ status: 'error', error: t('settings.checkFailed') });
         }
-    }, [ipcRenderer, t]);
+    }, [t]);
 
-    // 下载更新
-    const handleDownloadUpdate = useCallback(async () => {
-        try {
-            await ipcRenderer.invoke('download-update');
-        } catch (error) {
-            setUpdateState({ status: 'error', error: t('settings.downloadFailed') });
+    // 下载更新 (打开下载链接)
+    const handleDownloadUpdate = useCallback(() => {
+        if (updateState.downloadUrl) {
+            const { shell } = window.require('electron');
+            shell.openExternal(updateState.downloadUrl);
         }
-    }, [ipcRenderer, t]);
+    }, [updateState.downloadUrl]);
 
     // 切换语言
     const handleLanguageChange = useCallback((newLocale: Locale) => {
         setLocale(newLocale);
     }, [setLocale]);
-
-    // 安装更新
-    const handleInstallUpdate = useCallback(() => {
-        ipcRenderer.invoke('install-update');
-    }, [ipcRenderer]);
 
     // 切换分析开关
     const toggleAnalytics = useCallback(() => {
@@ -94,12 +90,9 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         setAnalyticsEnabled(newValue);
     }, [analyticsOn]);
 
-    // 打开反馈表单
+    // 打开反馈弹窗
     const openFeedback = useCallback(() => {
-        // 使用 Tally 表单或 GitHub Issues
-        const feedbackUrl = 'https://github.com/YOUR_USERNAME/verboo/issues/new?template=feedback.md';
-        const { shell } = window.require('electron');
-        shell.openExternal(feedbackUrl);
+        setFeedbackOpen(true);
     }, []);
 
     if (!isOpen) return null;
@@ -135,7 +128,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                         </div>
                         <div className="bg-gray-50 rounded-xl p-4">
                             <div className="flex items-center gap-3">
-                                <img src="/verboo.svg" alt="Verboo" className="h-8" />
+                                <img src="./verboo.svg" alt="Verboo" className="h-8" />
                                 <div>
                                     <div className="text-sm font-medium text-gray-900">Verboo</div>
                                     <div className="text-xs text-gray-500">
@@ -224,40 +217,16 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                     <div className="text-sm text-gray-700">
                                         {t('settings.newVersion')} <span className="font-medium">{updateState.version}</span>
                                     </div>
+                                    {updateState.releaseNotes && (
+                                        <div className="text-xs text-gray-500 bg-white rounded-lg p-2 max-h-20 overflow-y-auto">
+                                            {updateState.releaseNotes}
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handleDownloadUpdate}
-                                        className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
+                                        className="w-full py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
                                     >
                                         {t('settings.downloadUpdate')}
-                                    </button>
-                                </div>
-                            )}
-
-                            {updateState.status === 'downloading' && (
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-500">{t('settings.downloading')}</span>
-                                        <span className="text-gray-700 font-medium">{updateState.progress}%</span>
-                                    </div>
-                                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-blue-500 transition-all duration-300"
-                                            style={{ width: `${updateState.progress || 0}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {updateState.status === 'downloaded' && (
-                                <div className="space-y-3">
-                                    <div className="text-sm text-green-600">
-                                        {t('settings.downloaded')}
-                                    </div>
-                                    <button
-                                        onClick={handleInstallUpdate}
-                                        className="w-full py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
-                                    >
-                                        {t('settings.installNow')}
                                     </button>
                                 </div>
                             )}
@@ -292,14 +261,12 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                                 </div>
                                 <button
                                     onClick={toggleAnalytics}
-                                    className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
-                                        analyticsOn ? 'bg-blue-500' : 'bg-gray-300'
-                                    }`}
+                                    className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${analyticsOn ? 'bg-blue-500' : 'bg-gray-300'
+                                        }`}
                                 >
                                     <span
-                                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                                            analyticsOn ? 'translate-x-4' : 'translate-x-0'
-                                        }`}
+                                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${analyticsOn ? 'translate-x-4' : 'translate-x-0'
+                                            }`}
                                     />
                                 </button>
                             </div>
@@ -312,28 +279,21 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                             <MessageSquare size={14} className="text-gray-400" />
                             <h3 className="text-sm font-medium text-gray-500">{t('settings.feedback')}</h3>
                         </div>
-                        <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+                        <div className="bg-gray-50 rounded-xl">
                             <button
                                 onClick={openFeedback}
-                                className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors rounded-t-xl"
+                                className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors rounded-xl"
                             >
                                 <span>{t('settings.submitFeedback')}</span>
-                                <ExternalLink size={14} className="text-gray-400" />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const { shell } = window.require('electron');
-                                    shell.openExternal('https://github.com/YOUR_USERNAME/verboo');
-                                }}
-                                className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors rounded-b-xl"
-                            >
-                                <span>GitHub</span>
-                                <ExternalLink size={14} className="text-gray-400" />
+                                <ChevronRight size={14} className="text-gray-400" />
                             </button>
                         </div>
                     </section>
                 </div>
             </div>
+
+            {/* 反馈弹窗 */}
+            <FeedbackDialog isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
         </div>
     );
 }

@@ -25,6 +25,7 @@
     "release:publish": "./scripts/release.sh"
   },
   "dependencies": {
+    "@ooakloowj/orbit": "^0.1.0",
     "@types/react-window": "^1.8.8",
     "better-sqlite3": "^12.5.0",
     "electron-log": "^5.2.0",

@@ -85,8 +85,8 @@ export function WelcomePage({ onNavigate, isExiting }: WelcomePageProps) {
     };
 
     const quickLinks = [
-        { name: 'YouTube', url: 'https://www.youtube.com', icon: '/icons8-youtube.svg' },
-        { name: 'Bilibili', url: 'https://www.bilibili.com', icon: '/icons8-bilibili.svg' },
+        { name: 'YouTube', url: 'https://www.youtube.com', icon: './icons8-youtube.svg' },
+        { name: 'Bilibili', url: 'https://www.bilibili.com', icon: './icons8-bilibili.svg' },
     ];
 
     return (

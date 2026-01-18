@@ -24,7 +24,8 @@
     "unknown": "Unknown",
     "items": "items",
     "noMatch": "No matches found",
-    "tryOther": "Try a different search"
+    "tryOther": "Try a different search",
+    "optional": "optional"
   },
   "settings": {
     "title": "Settings",
@@ -311,5 +312,16 @@
     "copiedToClipboard": "Copied to clipboard",
     "deletedSuccessfully": "Deleted successfully",
     "savedSuccessfully": "Saved successfully"
+  },
+  "feedback": {
+    "title": "Send Feedback",
+    "content": "Your feedback",
+    "contentPlaceholder": "Describe your issue, suggestion, or idea...",
+    "contact": "Contact",
+    "contactPlaceholder": "Email or other contact info",
+    "submit": "Submit Feedback",
+    "submitting": "Submitting...",
+    "success": "Thanks for your feedback!",
+    "error": "Failed to submit. Please try again."
   }
 }

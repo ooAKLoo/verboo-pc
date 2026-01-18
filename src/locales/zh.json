@@ -24,7 +24,8 @@
     "unknown": "未知",
     "items": "条",
     "noMatch": "未找到匹配结果",
-    "tryOther": "尝试其他搜索词"
+    "tryOther": "尝试其他搜索词",
+    "optional": "可选"
   },
   "settings": {
     "title": "设置",
@@ -311,5 +312,16 @@
     "copiedToClipboard": "已复制到剪贴板",
     "deletedSuccessfully": "删除成功",
     "savedSuccessfully": "保存成功"
+  },
+  "feedback": {
+    "title": "提交反馈",
+    "content": "反馈内容",
+    "contentPlaceholder": "请描述您的问题、建议或想法...",
+    "contact": "联系方式",
+    "contactPlaceholder": "邮箱或其他联系方式",
+    "submit": "提交反馈",
+    "submitting": "提交中...",
+    "success": "感谢您的反馈！",
+    "error": "提交失败，请稍后重试"
   }
 }
