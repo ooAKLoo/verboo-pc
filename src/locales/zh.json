@@ -170,9 +170,12 @@
     "separatorWhite": "白色",
     "separatorBlack": "黑色",
     "separatorNone": "无",
-    "separatorWidth": "宽度",
+    "separatorWidth": "分割线宽度",
     "cropRatio": "裁剪",
-    "cardShowTimestamp": "显示时间戳"
+    "cardShowTimestamp": "显示时间戳",
+    "cardStyle": "风格",
+    "cardStyleClassic": "风格1",
+    "cardStyleElegant": "风格2"
   },
   "subtitleDialog": {
     "title": "获取字幕",

@@ -4,7 +4,7 @@
  */
 
 import { BaseRenderer } from '../BaseRenderer';
-import type { IRenderMode, RenderContext, SubtitleItem, CardModeOptions } from '../types';
+import type { IRenderMode, RenderContext, SubtitleItem } from '../types';
 
 export class CardMode extends BaseRenderer implements IRenderMode {
   readonly name = 'card' as const;
@@ -13,8 +13,20 @@ export class CardMode extends BaseRenderer implements IRenderMode {
   private readonly SOURCE_HEIGHT = 56;
   private readonly BORDER_RADIUS = 16;
   private readonly ACCENT_BAR_WIDTH = 4;
+  private readonly ELEGANT_PADDING = 52;
+  private readonly ELEGANT_SOURCE_HEIGHT = 52;
+  private readonly ELEGANT_RADIUS = 20;
 
   render(context: RenderContext): void {
+    const cardStyle = context.config.cardOptions?.style || 'classic';
+    if (cardStyle === 'elegant') {
+      this.renderElegant(context);
+      return;
+    }
+    this.renderClassic(context);
+  }
+
+  private renderClassic(context: RenderContext): void {
     const { canvas, ctx, img, subs, config } = context;
     const { subtitleStyle, videoTitle, cardOptions } = config;
 
@@ -68,6 +80,101 @@ export class CardMode extends BaseRenderer implements IRenderMode {
 
     // 7. 绘制整体卡片边框（极淡）
     this.drawCardBorder(ctx, logicalWidth, logicalHeight);
+  }
+
+  private renderElegant(context: RenderContext): void {
+    const { canvas, ctx, img, subs, config } = context;
+    const { subtitleStyle, videoTitle, cardOptions } = config;
+
+    const logicalImgWidth = img.width;
+    const logicalImgHeight = img.height;
+    const displayFontSize = Math.round(subtitleStyle.fontSize * 1.12);
+    const textLayout = subs.length > 0
+      ? this.layoutElegantSubtitles(ctx, subs, logicalImgWidth + this.ELEGANT_PADDING * 2, displayFontSize)
+      : { totalTextHeight: 0, areaHeight: 0, paragraphs: [] as string[][] };
+
+    const logicalCanvasWidth = logicalImgWidth + this.ELEGANT_PADDING * 2;
+    const logicalCanvasHeight = logicalImgHeight + textLayout.areaHeight + this.ELEGANT_SOURCE_HEIGHT + this.ELEGANT_PADDING * 2;
+
+    const { logicalWidth, logicalHeight } = this.setupCanvasWithScale(
+      canvas,
+      ctx,
+      logicalCanvasWidth,
+      logicalCanvasHeight
+    );
+
+    const accentColor = this.sampleAccentColorFromImage(img);
+
+    // 背景：温润渐变白，营造高级感
+    const bg = ctx.createLinearGradient(0, 0, logicalWidth, logicalHeight);
+    bg.addColorStop(0, '#f3f0ea');
+    bg.addColorStop(1, '#ffffff');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+    // 图片周围柔和晕染（先于图片绘制）
+    const halo = ctx.createRadialGradient(
+      logicalWidth / 2,
+      this.ELEGANT_PADDING + logicalImgHeight / 2,
+      0,
+      logicalWidth / 2,
+      this.ELEGANT_PADDING + logicalImgHeight / 2,
+      Math.max(logicalImgWidth, logicalImgHeight) * 0.8
+    );
+    halo.addColorStop(0, this.toRgba(accentColor, 0.12));
+    halo.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+    // 图像磨砂边框 + 轻柔阴影
+    const frameInset = 8;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(
+      this.ELEGANT_PADDING - frameInset,
+      this.ELEGANT_PADDING - frameInset,
+      logicalImgWidth + frameInset * 2,
+      logicalImgHeight + frameInset * 2,
+      this.ELEGANT_RADIUS + 6
+    );
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(this.ELEGANT_PADDING, this.ELEGANT_PADDING, logicalImgWidth, logicalImgHeight, this.ELEGANT_RADIUS);
+    ctx.clip();
+    ctx.drawImage(img, this.ELEGANT_PADDING, this.ELEGANT_PADDING, logicalImgWidth, logicalImgHeight);
+    ctx.restore();
+
+    let currentY = this.ELEGANT_PADDING + logicalImgHeight;
+    if (subs.length > 0) {
+      this.drawElegantSubtitles(
+        ctx,
+        textLayout,
+        logicalWidth,
+        currentY,
+        displayFontSize,
+        accentColor
+      );
+      currentY += textLayout.areaHeight;
+    }
+
+    const showTimestamp = cardOptions?.showTimestamp && cardOptions?.timestamp !== undefined;
+    this.drawElegantFooterRow(
+      ctx,
+      logicalWidth,
+      logicalHeight - this.ELEGANT_SOURCE_HEIGHT,
+      videoTitle,
+      showTimestamp ? cardOptions?.timestamp : undefined
+    );
+
+    this.drawCardBorderElegant(ctx, logicalWidth, logicalHeight);
   }
 
   /**
@@ -135,7 +242,8 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     x: number,
     y: number,
     drawWidth: number,
-    drawHeight: number
+    drawHeight: number,
+    radius: number = this.BORDER_RADIUS
   ): void {
     ctx.save();
 
@@ -148,7 +256,7 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     // 绘制圆角矩形作为阴影载体
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.roundRect(x, y, drawWidth, drawHeight, this.BORDER_RADIUS);
+    ctx.roundRect(x, y, drawWidth, drawHeight, radius);
     ctx.fill();
 
     ctx.restore();
@@ -156,7 +264,7 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     // 绘制图片（裁剪圆角）
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(x, y, drawWidth, drawHeight, this.BORDER_RADIUS);
+    ctx.roundRect(x, y, drawWidth, drawHeight, radius);
     ctx.clip();
     ctx.drawImage(img, x, y, drawWidth, drawHeight);
     ctx.restore();
@@ -222,6 +330,36 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     const b = Math.round(dominant.b / dominant.count);
 
     return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  /**
+   * 从图片中采样主题色（不污染主画布）
+   */
+  private sampleAccentColorFromImage(img: HTMLImageElement): string {
+    const sampleWidth = 20;
+    const sampleHeight = Math.min(img.height, 100);
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = sampleWidth;
+    tempCanvas.height = sampleHeight;
+    const tctx = tempCanvas.getContext('2d');
+    if (!tctx) {
+      return 'rgb(99, 102, 241)';
+    }
+
+    const sampleY = (img.height - sampleHeight) / 2;
+    tctx.drawImage(
+      img,
+      0,
+      sampleY,
+      sampleWidth,
+      sampleHeight,
+      0,
+      0,
+      sampleWidth,
+      sampleHeight
+    );
+
+    return this.extractAccentColor(tctx, sampleWidth, sampleHeight, 0, 0);
   }
 
   /**
@@ -293,6 +431,239 @@ export class CardMode extends BaseRenderer implements IRenderMode {
     ctx.beginPath();
     ctx.roundRect(0.5, 0.5, width - 1, height - 1, 20);
     ctx.stroke();
+  }
+
+  /**
+   * 绘制卡片整体边框（优雅版）
+   */
+  private drawCardBorderElegant(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number
+  ): void {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(0.5, 0.5, width - 1, height - 1, 24);
+    ctx.stroke();
+  }
+
+  /**
+   * 优雅版字幕排版计算
+   */
+  private layoutElegantSubtitles(
+    ctx: CanvasRenderingContext2D,
+    subs: SubtitleItem[],
+    width: number,
+    fontSize: number
+  ): { totalTextHeight: number; areaHeight: number; paragraphs: string[][] } {
+    const textPaddingX = 64;
+    const maxTextWidth = width - textPaddingX * 2;
+    const lineHeight = Math.round(fontSize * 1.9);
+    const paragraphGap = Math.round(fontSize * 0.9);
+
+    ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+
+    const paragraphs = subs.map((sub) => this.wrapText(ctx, sub.text, maxTextWidth));
+    const lineCount = paragraphs.reduce((acc, lines) => acc + lines.length, 0);
+    const totalTextHeight = lineCount * lineHeight + Math.max(0, paragraphs.length - 1) * paragraphGap;
+    const areaHeight = totalTextHeight + 110;
+
+    return { totalTextHeight, areaHeight, paragraphs };
+  }
+
+  /**
+   * 优雅版字幕绘制
+   */
+  private drawElegantSubtitles(
+    ctx: CanvasRenderingContext2D,
+    layout: { totalTextHeight: number; areaHeight: number; paragraphs: string[][] },
+    width: number,
+    startY: number,
+    fontSize: number,
+    accentColor: string
+  ): void {
+    const textPaddingX = 64;
+    const lineHeight = Math.round(fontSize * 1.9);
+    const paragraphGap = Math.round(fontSize * 0.9);
+    const textAreaStartY = startY + (layout.areaHeight - layout.totalTextHeight) / 2;
+
+    // 顶部细线强调
+    const accentWidth = Math.min(140, width * 0.28);
+    ctx.save();
+    ctx.strokeStyle = this.toRgba(accentColor, 0.35);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo((width - accentWidth) / 2, startY + 24);
+    ctx.lineTo((width + accentWidth) / 2, startY + 24);
+    ctx.stroke();
+    ctx.restore();
+
+    if (layout.paragraphs.length > 0) {
+      const panelInsetX = 44;
+      const panelInsetY = 18;
+      const panelX = panelInsetX;
+      const panelY = startY + panelInsetY;
+      const panelW = width - panelInsetX * 2;
+      const panelH = layout.areaHeight - panelInsetY * 2;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.10)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+      ctx.beginPath();
+      ctx.roundRect(panelX, panelY, panelW, panelH, 18);
+      ctx.fill();
+      ctx.restore();
+
+      const border = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY + panelH);
+      border.addColorStop(0, this.toRgba(accentColor, 0.45));
+      border.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.save();
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1, 18);
+      ctx.stroke();
+      ctx.restore();
+
+      // 背景引号（低透明度）
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = accentColor;
+      ctx.font = `600 ${Math.round(fontSize * 3)}px -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+      ctx.fillText('“', textPaddingX - 10, textAreaStartY + lineHeight * 0.6);
+      ctx.textAlign = 'right';
+      ctx.fillText('”', width - textPaddingX + 10, textAreaStartY + layout.totalTextHeight + lineHeight * 0.4);
+      ctx.restore();
+
+      // 正文
+      ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#1f2937';
+
+      let yPosition = textAreaStartY + lineHeight / 2;
+      layout.paragraphs.forEach((lines, pIndex) => {
+        lines.forEach((line) => {
+          ctx.fillText(line, width / 2, yPosition);
+          yPosition += lineHeight;
+        });
+        if (pIndex < layout.paragraphs.length - 1) {
+          yPosition += paragraphGap;
+        }
+      });
+    }
+  }
+
+  /**
+   * 优雅版底部信息行（左对齐标题 + 右对齐时间戳）
+   */
+  private drawElegantFooterRow(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    startY: number,
+    videoTitle?: string,
+    timestamp?: number
+  ): void {
+    const centerY = startY + this.ELEGANT_SOURCE_HEIGHT / 2;
+    const padding = this.ELEGANT_PADDING;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, startY + 0.5);
+    ctx.lineTo(width - padding, startY + 0.5);
+    ctx.stroke();
+
+    ctx.font = '500 12px -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif';
+    ctx.fillStyle = '#9ca3af';
+    ctx.textBaseline = 'middle';
+
+    const timeText = timestamp !== undefined ? this.formatTime(timestamp) : '';
+    const maxTitleWidth = width - padding * 2 - (timeText ? ctx.measureText(timeText).width + 16 : 0);
+
+    let displayTitle = videoTitle || '';
+    if (displayTitle && ctx.measureText(displayTitle).width > maxTitleWidth) {
+      while (ctx.measureText(displayTitle + '...').width > maxTitleWidth && displayTitle.length > 0) {
+        displayTitle = displayTitle.slice(0, -1);
+      }
+      displayTitle = displayTitle + '...';
+    }
+
+    if (displayTitle) {
+      ctx.textAlign = 'left';
+      ctx.fillText(displayTitle, padding, centerY);
+    }
+    if (timeText) {
+      ctx.textAlign = 'right';
+      ctx.fillText(timeText, width - padding, centerY);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * 文本自动换行（支持中文无空格场景）
+   */
+  private wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    const trimmed = text.trim();
+    if (!trimmed) return [''];
+
+    const hasSpaces = /\s/.test(trimmed);
+    const tokens = hasSpaces ? trimmed.split(/\s+/) : Array.from(trimmed);
+    const joiner = hasSpaces ? ' ' : '';
+    const lines: string[] = [];
+    let line = '';
+
+    const pushLine = () => {
+      if (line) lines.push(line);
+      line = '';
+    };
+
+    for (const token of tokens) {
+      const testLine = line ? `${line}${joiner}${token}` : token;
+      if (ctx.measureText(testLine).width <= maxWidth) {
+        line = testLine;
+        continue;
+      }
+
+      if (!line) {
+        let partial = '';
+        for (const char of Array.from(token)) {
+          const testPartial = partial + char;
+          if (ctx.measureText(testPartial).width <= maxWidth) {
+            partial = testPartial;
+          } else {
+            if (partial) lines.push(partial);
+            partial = char;
+          }
+        }
+        line = partial;
+      } else {
+        pushLine();
+        line = token;
+      }
+    }
+
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  /**
+   * RGB 转 RGBA
+   */
+  private toRgba(color: string, alpha: number): string {
+    if (color.startsWith('rgba(')) return color;
+    if (color.startsWith('rgb(')) {
+      return color.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
+    }
+    return color;
   }
 
   /**

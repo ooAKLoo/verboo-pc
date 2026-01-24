@@ -31,6 +31,7 @@ export interface ScreenshotTypeData {
     stitchSeparatorWidth?: number;
     stitchCropRatio?: number;
     cardShowTimestamp?: boolean;
+    cardStyle?: 'classic' | 'elegant';
 }
 
 export interface Asset {

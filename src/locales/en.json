@@ -172,7 +172,10 @@
     "separatorNone": "None",
     "separatorWidth": "Width",
     "cropRatio": "Crop",
-    "cardShowTimestamp": "Show Timestamp"
+    "cardShowTimestamp": "Show Timestamp",
+    "cardStyle": "Style",
+    "cardStyleClassic": "Style 1",
+    "cardStyleElegant": "Style 2"
   },
   "subtitleDialog": {
     "title": "Get Subtitles",

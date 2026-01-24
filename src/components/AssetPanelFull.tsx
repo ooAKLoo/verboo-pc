@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Check, Edit3, ChevronLeft, ChevronRight, Copy, Layers, CreditCard, GalleryVertical, LayoutTemplate } from 'lucide-react';
+import { Trash2, Download, ExternalLink, Play, Image as ImageIcon, ArrowLeft, X, ArrowDownUp, ChevronDown, Star, AlertTriangle, Globe, Video, Search, Clock, Type, AlignVerticalJustifyStart, Palette, Check, Edit3, ChevronLeft, ChevronRight, Copy, Layers, CreditCard, GalleryVertical, LayoutTemplate, Sparkles } from 'lucide-react';
 import { AssetCard, type Asset, type AssetType, type ScreenshotTypeData, type ContentTypeData } from './AssetCard';
 import type { SubtitleItem } from '../utils/subtitleParser';
 import { useTranslation } from '../contexts/I18nContext';
-import { ScreenshotRenderer, type DisplayMode, type SeparatorStyle } from '../utils/screenshot';
+import { ScreenshotRenderer, type DisplayMode, type SeparatorStyle, type CardStyle } from '../utils/screenshot';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -272,6 +272,7 @@ function ScreenshotDetailView({
 
     // 卡片模式选项（时间戳默认显示）
     const [cardShowTimestamp, setCardShowTimestamp] = useState(screenshotData.cardShowTimestamp ?? true);
+    const [cardStyle, setCardStyle] = useState<CardStyle>(screenshotData.cardStyle || 'classic');
 
     // 创建渲染器实例
     const rendererRef = useRef<ScreenshotRenderer | null>(null);
@@ -385,7 +386,8 @@ function ScreenshotDetailView({
         // 创建或更新渲染器
         const cardOptions = {
             showTimestamp: cardShowTimestamp,
-            timestamp: screenshotData.timestamp
+            timestamp: screenshotData.timestamp,
+            style: cardStyle
         };
 
         if (!rendererRef.current) {
@@ -416,7 +418,7 @@ function ScreenshotDetailView({
             rendererRef.current?.render(canvas, ctx, img, selectedSubs);
         };
         img.src = screenshotData.imageData;
-    }, [screenshotData.imageData, selectedSubtitles, subtitles, displayMode, subtitleStyle, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, asset.title, cardShowTimestamp]);
+    }, [screenshotData.imageData, selectedSubtitles, subtitles, displayMode, subtitleStyle, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, asset.title, cardShowTimestamp, cardStyle]);
 
     const toggleSubtitle = (index: number) => {
         setSelectedSubtitles(prev =>
@@ -447,7 +449,8 @@ function ScreenshotDetailView({
             stitchSeparator,
             stitchSeparatorWidth,
             stitchCropRatio,
-            cardShowTimestamp
+            cardShowTimestamp,
+            cardStyle
         });
 
         // Skip if nothing changed since last save
@@ -480,7 +483,8 @@ function ScreenshotDetailView({
                     stitchSeparator,
                     stitchSeparatorWidth,
                     stitchCropRatio,
-                    cardShowTimestamp
+                    cardShowTimestamp,
+                    cardStyle
                 }
             });
 
@@ -498,7 +502,8 @@ function ScreenshotDetailView({
                         stitchSeparator,
                         stitchSeparatorWidth,
                         stitchCropRatio,
-                        cardShowTimestamp
+                        cardShowTimestamp,
+                        cardStyle
                     }
                 };
                 onUpdate(updatedAsset);
@@ -515,7 +520,7 @@ function ScreenshotDetailView({
             isSavingRef.current = false;
             setIsSaving(false);
         }
-    }, [asset.id, screenshotData, subtitles, onUpdate, t, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp]);
+    }, [asset.id, screenshotData, subtitles, onUpdate, t, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp, cardStyle]);
 
     // Auto-save when selectedSubtitles, subtitleStyle, or display settings change
     useEffect(() => {
@@ -539,7 +544,7 @@ function ScreenshotDetailView({
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [selectedSubtitles, subtitleStyle, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp]);
+    }, [selectedSubtitles, subtitleStyle, displayMode, stitchSeparator, stitchSeparatorWidth, stitchCropRatio, cardShowTimestamp, cardStyle]);
 
     // Mark as initialized after subtitles are loaded and initial selection is set
     useEffect(() => {
@@ -658,20 +663,34 @@ function ScreenshotDetailView({
                                 <LayoutTemplate size={12} className="text-zinc-400" />
                                 <span className="text-[11px] text-zinc-500">{t('assets.displayMode')}</span>
                                 <div className="relative grid grid-cols-4 gap-0.5 p-1 bg-white rounded-lg">
+                                    {/* Sliding indicator */}
+                                    <div
+                                        className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                        style={{
+                                            width: 'calc(25% - 4px)',
+                                            left: displayMode === 'overlay'
+                                                ? '4px'
+                                                : displayMode === 'separated'
+                                                    ? 'calc(25% + 2px)'
+                                                    : displayMode === 'card'
+                                                        ? '50%'
+                                                        : 'calc(75% - 2px)'
+                                        }}
+                                    />
                                     {[
                                         { value: 'overlay', icon: Layers, labelKey: 'assets.modeOverlay' },
                                         { value: 'separated', icon: AlignVerticalJustifyStart, labelKey: 'assets.modeSeparated' },
                                         { value: 'card', icon: CreditCard, labelKey: 'assets.modeCard' },
                                         { value: 'stitch', icon: GalleryVertical, labelKey: 'assets.modeStitch' }
-                                    ].map((mode, index) => {
+                                    ].map((mode) => {
                                         const Icon = mode.icon;
                                         return (
                                             <button
                                                 key={mode.value}
                                                 onClick={() => setDisplayMode(mode.value as DisplayMode)}
-                                                className={`relative z-10 flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition-all duration-200 ${
+                                                className={`relative z-10 flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition-colors duration-200 ${
                                                     displayMode === mode.value
-                                                        ? 'bg-zinc-100 text-zinc-900'
+                                                        ? 'text-zinc-900'
                                                         : 'text-zinc-500 hover:text-zinc-700'
                                                 }`}
                                                 title={t(mode.labelKey)}
@@ -683,65 +702,6 @@ function ScreenshotDetailView({
                                     })}
                                 </div>
                             </div>
-
-
-                            {/* Stitch Settings - Only show when stitch mode is selected */}
-                            {displayMode === 'stitch' && (
-                                <div className="flex items-center gap-4 pl-5 flex-wrap">
-                                    {/* 裁剪比例 */}
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[11px] text-zinc-500">{t('assets.cropRatio')}</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={0.8}
-                                            step={0.05}
-                                            value={stitchCropRatio}
-                                            onChange={(e) => setStitchCropRatio(Number(e.target.value))}
-                                            className="w-24 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
-                                        />
-                                        <span className="text-[11px] font-mono text-zinc-400 w-8">{Math.round(stitchCropRatio * 100)}%</span>
-                                    </div>
-                                    {/* 分隔线 */}
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[11px] text-zinc-500">{t('assets.separator')}</span>
-                                        <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
-                                            {[
-                                                { value: 'white', labelKey: 'assets.separatorWhite' },
-                                                { value: 'black', labelKey: 'assets.separatorBlack' },
-                                                { value: 'none', labelKey: 'assets.separatorNone' }
-                                            ].map((opt) => (
-                                                <button
-                                                    key={opt.value}
-                                                    onClick={() => setStitchSeparator(opt.value as SeparatorStyle)}
-                                                    className={`relative z-10 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 ${
-                                                        stitchSeparator === opt.value
-                                                            ? 'bg-zinc-100 text-zinc-900'
-                                                            : 'text-zinc-500 hover:text-zinc-700'
-                                                    }`}
-                                                >
-                                                    {t(opt.labelKey)}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {stitchSeparator !== 'none' && (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[11px] text-zinc-500">{t('assets.separatorWidth')}</span>
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={12}
-                                                step={1}
-                                                value={stitchSeparatorWidth}
-                                                onChange={(e) => setStitchSeparatorWidth(Number(e.target.value))}
-                                                className="w-16 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
-                                            />
-                                            <span className="text-[11px] font-mono text-zinc-400 w-6">{stitchSeparatorWidth}px</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Original Settings - Second Row */}
                             <div className="flex items-center gap-6 flex-wrap">
@@ -760,6 +720,40 @@ function ScreenshotDetailView({
                                     />
                                     <span className="text-[11px] font-mono text-zinc-400 w-8">{subtitleStyle.fontSize}px</span>
                                 </div>
+
+                                {/* Card Style - Only show when card mode is selected */}
+                                {displayMode === 'card' && (
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles size={12} className="text-zinc-400" />
+                                        <span className="text-[11px] text-zinc-500">{t('assets.cardStyle')}</span>
+                                        <div className="relative grid grid-cols-2 gap-0.5 p-1 bg-white rounded-lg">
+                                            {/* Sliding indicator */}
+                                            <div
+                                                className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                                style={{
+                                                    width: 'calc(50% - 6px)',
+                                                    left: cardStyle === 'classic' ? '4px' : 'calc(50% + 2px)'
+                                                }}
+                                            />
+                                            {[
+                                                { value: 'classic', labelKey: 'assets.cardStyleClassic' },
+                                                { value: 'elegant', labelKey: 'assets.cardStyleElegant' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => setCardStyle(opt.value as CardStyle)}
+                                                    className={`relative z-10 px-3 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 text-center ${
+                                                        cardStyle === opt.value
+                                                            ? 'text-zinc-900'
+                                                            : 'text-zinc-500 hover:text-zinc-700'
+                                                    }`}
+                                                >
+                                                    {t(opt.labelKey)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Position - Only show for overlay and stitch modes */}
                                 {(displayMode === 'overlay' || displayMode === 'stitch') && (
@@ -827,6 +821,76 @@ function ScreenshotDetailView({
                                     </div>
                                 )}
                             </div>
+
+                            {/* Stitch Settings - Only show when stitch mode is selected */}
+                            {displayMode === 'stitch' && (
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    {/* 裁剪比例 */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-zinc-500">{t('assets.cropRatio')}</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.8}
+                                            step={0.05}
+                                            value={stitchCropRatio}
+                                            onChange={(e) => setStitchCropRatio(Number(e.target.value))}
+                                            className="w-24 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
+                                        />
+                                        <span className="text-[11px] font-mono text-zinc-400 w-8">{Math.round(stitchCropRatio * 100)}%</span>
+                                    </div>
+                                    {/* 分隔线 */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-zinc-500">{t('assets.separator')}</span>
+                                        <div className="relative grid grid-cols-3 gap-0.5 p-1 bg-white rounded-lg">
+                                            {/* Sliding indicator */}
+                                            <div
+                                                className="absolute top-1 bottom-1 bg-zinc-100 rounded-md transition-all duration-200 ease-out pointer-events-none"
+                                                style={{
+                                                    width: 'calc(33.333% - 4px)',
+                                                    left: stitchSeparator === 'white'
+                                                        ? '4px'
+                                                        : stitchSeparator === 'black'
+                                                            ? 'calc(33.333% + 2px)'
+                                                            : 'calc(66.666%)'
+                                                }}
+                                            />
+                                            {[
+                                                { value: 'white', labelKey: 'assets.separatorWhite' },
+                                                { value: 'black', labelKey: 'assets.separatorBlack' },
+                                                { value: 'none', labelKey: 'assets.separatorNone' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => setStitchSeparator(opt.value as SeparatorStyle)}
+                                                    className={`relative z-10 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors duration-200 ${
+                                                        stitchSeparator === opt.value
+                                                            ? 'text-zinc-900'
+                                                            : 'text-zinc-500 hover:text-zinc-700'
+                                                    }`}
+                                                >
+                                                    {t(opt.labelKey)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {stitchSeparator !== 'none' && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-zinc-500">{t('assets.separatorWidth')}</span>
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={12}
+                                                step={1}
+                                                value={stitchSeparatorWidth}
+                                                onChange={(e) => setStitchSeparatorWidth(Number(e.target.value))}
+                                                className="w-16 h-1 bg-zinc-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-900"
+                                            />
+                                            <span className="text-[11px] font-mono text-zinc-400 w-6">{stitchSeparatorWidth}px</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 

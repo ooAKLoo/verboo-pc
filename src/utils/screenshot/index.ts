@@ -28,6 +28,7 @@ export { ScreenshotRenderer, createScreenshotRenderer, renderScreenshot } from '
 export type {
   DisplayMode,
   SeparatorStyle,
+  CardStyle,
   RGBColor,
   SubtitleStyle,
   RenderConfig,

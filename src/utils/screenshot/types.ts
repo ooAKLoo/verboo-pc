@@ -10,6 +10,9 @@ export type DisplayMode = 'overlay' | 'separated' | 'card' | 'stitch';
 /** 分隔线样式 */
 export type SeparatorStyle = 'none' | 'white' | 'black';
 
+/** 卡片样式 */
+export type CardStyle = 'classic' | 'elegant';
+
 /** RGB 颜色 */
 export interface RGBColor {
   r: number;
@@ -29,6 +32,7 @@ export interface SubtitleStyle {
 export interface CardModeOptions {
   showTimestamp: boolean;
   timestamp?: number;
+  style?: CardStyle;
 }
 
 /** 渲染配置 */
