@@ -245,6 +245,41 @@ function captureVideoFrame() {
 // ============ Expose API to Guest Page ============
 (function () {
     console.log('[Verboo] webview-preload.js loaded (WebContentsView mode)');
+    const isHttpUrl = (url) => /^https?:\/\//i.test(url);
+    const openInSameView = (url) => {
+        if (isHttpUrl(url)) {
+            window.location.assign(url);
+        }
+        else if (url && url !== 'about:blank') {
+            electron_1.ipcRenderer.send('open-external', url);
+        }
+    };
+    // Force window.open to reuse current WebContentsView
+    window.open = function (url) {
+        const href = url ? url.toString() : '';
+        if (href) {
+            openInSameView(href);
+        }
+        return window;
+    };
+    // Intercept target=_blank clicks to stay in the same view
+    const handleBlankTargetClick = (event) => {
+        if (event.defaultPrevented)
+            return;
+        const target = event.target;
+        const link = target?.closest?.('a');
+        if (!link)
+            return;
+        if (link.target !== '_blank')
+            return;
+        if (!link.href || link.href === 'about:blank')
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        openInSameView(link.href);
+    };
+    document.addEventListener('click', handleBlankTargetClick, true);
+    document.addEventListener('auxclick', handleBlankTargetClick, true);
     // For WebContentsView with contextIsolation, use ipcRenderer.send instead of sendToHost
     const verbooApi = {
         sendData: (data) => {

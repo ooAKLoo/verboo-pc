@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView } from 'electron';
+import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { t, setLocale, loadLocaleFromStorage, saveLocaleToStorage, type Locale } from './i18n';
@@ -158,6 +158,33 @@ function createWebContentsView(tabId: string, url: string, initialVisible: boole
  */
 function setupViewEventHandlers(tabId: string, view: WebContentsView): void {
     const webContents = view.webContents;
+
+    // Keep link clicks in the same WebContentsView instead of opening new windows
+    webContents.setWindowOpenHandler(({ url }) => {
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            webContents.loadURL(url);
+        } else if (url && url !== 'about:blank') {
+            shell.openExternal(url).catch(() => {
+                // Ignore failures for non-http protocols
+            });
+        }
+        return { action: 'deny' };
+    });
+
+    // Fallback: if a window still gets created, close it and reuse current view
+    webContents.on('did-create-window', (childWindow, details) => {
+        try {
+            if (details.url && (details.url.startsWith('http://') || details.url.startsWith('https://'))) {
+                webContents.loadURL(details.url);
+            } else if (details.url && details.url !== 'about:blank') {
+                shell.openExternal(details.url).catch(() => {
+                    // Ignore failures for non-http protocols
+                });
+            }
+        } finally {
+            childWindow.close();
+        }
+    });
 
     // Navigation events
     webContents.on('did-start-loading', () => {
@@ -647,6 +674,14 @@ function setupIpcHandlers() {
     });
 
     console.log('[Main] WebContentsView IPC handlers registered');
+
+    // Open external links requested from webview preload
+    ipcMain.on('open-external', (event, url: string) => {
+        if (!url || typeof url !== 'string') return;
+        shell.openExternal(url).catch(() => {
+            // Ignore failures for unsupported protocols
+        });
+    });
 
     // Handle YouTube subtitle extraction
     ipcMain.handle('get-youtube-subtitles', async (event, url: string) => {

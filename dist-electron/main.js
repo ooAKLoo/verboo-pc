@@ -141,6 +141,34 @@ function createWebContentsView(tabId, url, initialVisible = true) {
  */
 function setupViewEventHandlers(tabId, view) {
     const webContents = view.webContents;
+    // Keep link clicks in the same WebContentsView instead of opening new windows
+    webContents.setWindowOpenHandler(({ url }) => {
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            webContents.loadURL(url);
+        }
+        else if (url && url !== 'about:blank') {
+            electron_1.shell.openExternal(url).catch(() => {
+                // Ignore failures for non-http protocols
+            });
+        }
+        return { action: 'deny' };
+    });
+    // Fallback: if a window still gets created, close it and reuse current view
+    webContents.on('did-create-window', (childWindow, details) => {
+        try {
+            if (details.url && (details.url.startsWith('http://') || details.url.startsWith('https://'))) {
+                webContents.loadURL(details.url);
+            }
+            else if (details.url && details.url !== 'about:blank') {
+                electron_1.shell.openExternal(details.url).catch(() => {
+                    // Ignore failures for non-http protocols
+                });
+            }
+        }
+        finally {
+            childWindow.close();
+        }
+    });
     // Navigation events
     webContents.on('did-start-loading', () => {
         mainWindow?.webContents.send('wcv-did-start-loading', tabId);
@@ -586,6 +614,14 @@ function setupIpcHandlers() {
         }
     });
     console.log('[Main] WebContentsView IPC handlers registered');
+    // Open external links requested from webview preload
+    electron_1.ipcMain.on('open-external', (event, url) => {
+        if (!url || typeof url !== 'string')
+            return;
+        electron_1.shell.openExternal(url).catch(() => {
+            // Ignore failures for unsupported protocols
+        });
+    });
     // Handle YouTube subtitle extraction
     electron_1.ipcMain.handle('get-youtube-subtitles', async (event, url) => {
         try {
