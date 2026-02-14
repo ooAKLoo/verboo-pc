@@ -41,6 +41,17 @@ interface SubtitleRow {
     updated_at: string;
 }
 
+interface SubtitleIdentityRow {
+    id: number;
+    video_url: string;
+}
+
+interface VideoIdentity {
+    platform: 'youtube' | 'bilibili';
+    videoId: string;
+    canonicalUrl: string;
+}
+
 // Content type_data structure
 export interface ContentTypeData {
     content: string;
@@ -293,6 +304,100 @@ function rowToAsset(row: AssetRow): Asset {
         createdAt: new Date(row.created_at),
         updatedAt: new Date(row.updated_at),
     };
+}
+
+/**
+ * Parse known video platforms and extract a stable identity.
+ * This is used to keep subtitle association stable even when URL params change.
+ */
+function parseVideoIdentity(rawUrl: string): VideoIdentity | null {
+    if (!rawUrl) return null;
+    try {
+        const url = new URL(rawUrl);
+        const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+
+        // YouTube (watch / youtu.be / shorts / embed)
+        if (hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be') {
+            let videoId = '';
+            if (hostname === 'youtu.be') {
+                videoId = url.pathname.split('/').filter(Boolean)[0] || '';
+            } else if (url.pathname === '/watch') {
+                videoId = url.searchParams.get('v') || '';
+            } else if (url.pathname.startsWith('/shorts/')) {
+                videoId = url.pathname.split('/')[2] || '';
+            } else if (url.pathname.startsWith('/embed/')) {
+                videoId = url.pathname.split('/')[2] || '';
+            }
+            if (videoId) {
+                return {
+                    platform: 'youtube',
+                    videoId,
+                    canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`
+                };
+            }
+        }
+
+        // Bilibili (/video/BV... or /video/av...)
+        if (hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com')) {
+            const match = url.pathname.match(/\/video\/(BV[0-9A-Za-z]+|av\d+)/i);
+            if (match) {
+                const id = match[1];
+                const normalizedId = /^BV/i.test(id) ? `BV${id.slice(2)}` : id.toLowerCase();
+                return {
+                    platform: 'bilibili',
+                    videoId: normalizedId,
+                    canonicalUrl: `https://www.bilibili.com/video/${normalizedId}`
+                };
+            }
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+/**
+ * Normalize a subtitle URL so new saves are stable and deduplicated.
+ */
+function normalizeSubtitleVideoUrl(videoUrl: string): string {
+    const trimmed = (videoUrl || '').trim();
+    if (!trimmed) return '';
+
+    const identity = parseVideoIdentity(trimmed);
+    if (identity) return identity.canonicalUrl;
+
+    try {
+        const url = new URL(trimmed);
+        url.hash = '';
+        return url.toString();
+    } catch {
+        return trimmed;
+    }
+}
+
+/**
+ * Find an existing subtitle row by exact URL candidates, then by parsed video identity.
+ */
+function findSubtitleRowByUrlOrIdentity(videoUrl: string): SubtitleRow | undefined {
+    const db = getDatabase();
+    const normalizedUrl = normalizeSubtitleVideoUrl(videoUrl);
+    const candidates = Array.from(new Set([videoUrl, normalizedUrl].filter(Boolean)));
+
+    for (const candidate of candidates) {
+        const row = db.prepare('SELECT * FROM subtitles WHERE video_url = ?').get(candidate) as SubtitleRow | undefined;
+        if (row) return row;
+    }
+
+    const target = parseVideoIdentity(videoUrl);
+    if (!target) return undefined;
+
+    const rows = db.prepare('SELECT id, video_url FROM subtitles ORDER BY updated_at DESC').all() as SubtitleIdentityRow[];
+    const matched = rows.find((row) => {
+        const identity = parseVideoIdentity(row.video_url);
+        return Boolean(identity && identity.platform === target.platform && identity.videoId === target.videoId);
+    });
+    if (!matched) return undefined;
+    return db.prepare('SELECT * FROM subtitles WHERE id = ?').get(matched.id) as SubtitleRow | undefined;
 }
 
 /**
@@ -679,14 +784,25 @@ function rowToSubtitle(row: SubtitleRow): Subtitle {
  */
 export function saveSubtitles(input: SaveSubtitleInput): Subtitle {
     const db = getDatabase();
+    const normalizedVideoUrl = normalizeSubtitleVideoUrl(input.videoUrl);
 
-    // Check if subtitles already exist for this URL
-    const existing = db.prepare('SELECT id FROM subtitles WHERE video_url = ?').get(input.videoUrl) as { id: number } | undefined;
+    // Check if subtitles already exist for this URL or same video identity
+    const existing = findSubtitleRowByUrlOrIdentity(input.videoUrl);
 
     if (existing) {
+        // Prefer canonical URL, but don't violate unique constraint
+        let targetVideoUrl = existing.video_url;
+        if (normalizedVideoUrl && normalizedVideoUrl !== existing.video_url) {
+            const occupied = db.prepare('SELECT id FROM subtitles WHERE video_url = ?').get(normalizedVideoUrl) as { id: number } | undefined;
+            if (!occupied || occupied.id === existing.id) {
+                targetVideoUrl = normalizedVideoUrl;
+            }
+        }
+
         // Update existing record
         const stmt = db.prepare(`
             UPDATE subtitles SET
+                video_url = ?,
                 video_title = ?,
                 platform = ?,
                 subtitle_data = ?,
@@ -694,6 +810,7 @@ export function saveSubtitles(input: SaveSubtitleInput): Subtitle {
             WHERE id = ?
         `);
         stmt.run(
+            targetVideoUrl,
             input.videoTitle,
             input.platform,
             JSON.stringify(input.subtitleData),
@@ -710,7 +827,7 @@ export function saveSubtitles(input: SaveSubtitleInput): Subtitle {
             VALUES (?, ?, ?, ?)
         `);
         const result = stmt.run(
-            input.videoUrl,
+            normalizedVideoUrl || input.videoUrl,
             input.videoTitle,
             input.platform,
             JSON.stringify(input.subtitleData)
@@ -726,8 +843,7 @@ export function saveSubtitles(input: SaveSubtitleInput): Subtitle {
  * Get subtitles by video URL
  */
 export function getSubtitlesByUrl(videoUrl: string): Subtitle | null {
-    const db = getDatabase();
-    const row = db.prepare('SELECT * FROM subtitles WHERE video_url = ?').get(videoUrl) as SubtitleRow | undefined;
+    const row = findSubtitleRowByUrlOrIdentity(videoUrl);
     return row ? rowToSubtitle(row) : null;
 }
 

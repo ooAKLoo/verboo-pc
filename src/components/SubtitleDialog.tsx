@@ -144,6 +144,16 @@ export function SubtitleDialog({
     { name: 'DownSub', url: 'https://downsub.com', descKey: 'subtitleDialog.multiPlatform' }
   ];
 
+  const handlePlatformClick = (event: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+    event.preventDefault();
+    try {
+      const { shell } = window.require('electron');
+      shell.openExternal(url);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -327,6 +337,7 @@ export function SubtitleDialog({
                       href={platform.url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(event) => handlePlatformClick(event, platform.url)}
                       className="flex items-center justify-between px-3 py-2 bg-[#f4f4f5] hover:bg-[#e4e4e7] rounded-lg transition-colors duration-150 group"
                     >
                       <div>

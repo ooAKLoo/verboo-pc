@@ -1,0 +1,925 @@
+{
+  "version": "1.0",
+
+  "meta": {
+    "name": "Verboo",
+    "tagline": "Video Learning Assistant - Watch, Capture, Learn",
+    "platform": "electron",
+    "brandColors": ["#1a1a1a", "#5E6AD2"],
+    "canvas": { "width": 1920, "height": 1080 },
+    "iconLibrary": "lucide-react"
+  },
+
+  "tokens": {
+    "colors": {
+      "background": "#f5f5f5",
+      "card": "#ffffff",
+      "card-hover": "#f0f0f0",
+      "card-active": "#e5e5e5",
+      "text-primary": "#1a1a1a",
+      "text-secondary": "#525252",
+      "text-muted": "#a3a3a3",
+      "text-label": "#71717a",
+      "accent": "#5E6AD2",
+      "border": "rgba(0, 0, 0, 0.08)",
+      "border-hover": "rgba(0, 0, 0, 0.12)",
+      "tab-active-bg": "#f4f4f5",
+      "tab-active-text": "#18181b",
+      "tab-inactive-text": "#71717a",
+      "danger": "#dc2626",
+      "warning": "#f59e0b",
+      "success": "#16a34a",
+      "info": "#3b82f6",
+      "bilibili-pink": "#fb7299",
+      "dot-grid": "#d0d0d0",
+      "toast-bg": "#18181b",
+      "toast-error-bg": "#dc2626",
+      "scrollbar": "#d4d4d4",
+      "scrollbar-hover": "#a3a3a3",
+      "badge-bg": "#e4e4e7",
+      "badge-text": "#52525b",
+      "overlay": "rgba(0, 0, 0, 0.30)",
+      "overlay-heavy": "rgba(0, 0, 0, 0.60)",
+      "mark-important-bg": "rgba(251, 191, 36, 0.1)",
+      "mark-important-border": "#f59e0b",
+      "mark-difficult-bg": "rgba(239, 68, 68, 0.1)",
+      "mark-difficult-border": "#ef4444"
+    },
+    "typography": {
+      "fontFamily": "'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif",
+      "sizes": {
+        "xl": { "size": 20, "lineHeight": 28, "weight": 600 },
+        "lg": { "size": 16, "lineHeight": 24, "weight": 600 },
+        "title": { "size": 15, "lineHeight": 20, "weight": 600 },
+        "base": { "size": 14, "lineHeight": 20, "weight": 400 },
+        "body": { "size": 13, "lineHeight": 18, "weight": 400 },
+        "caption": { "size": 12, "lineHeight": 16, "weight": 500 },
+        "label": { "size": 11, "lineHeight": 14, "weight": 500 },
+        "badge": { "size": 10, "lineHeight": 14, "weight": 600 },
+        "micro": { "size": 9, "lineHeight": 12, "weight": 500 }
+      }
+    },
+    "spacing": { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24, "2xl": 32 },
+    "radii": { "sm": 6, "md": 8, "lg": 12, "xl": 16, "2xl": 20, "full": 9999 },
+    "shadows": {
+      "glass": "0 8px 30px rgba(0, 0, 0, 0.12)",
+      "glass-sm": "0 2px 8px rgba(0, 0, 0, 0.08)",
+      "glow": "0 0 20px rgba(94, 106, 210, 0.3)",
+      "dialog": "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+    },
+    "animations": {
+      "fadeIn": { "duration": "200ms", "easing": "ease-out" },
+      "slideIn": { "duration": "200ms", "easing": "ease-out", "translateY": "10px" },
+      "welcomeExit": { "duration": "700ms", "easing": "ease-out", "scale": "0.98" },
+      "panelCollapse": { "duration": "300ms", "easing": "ease-in-out" }
+    }
+  },
+
+  "screens": [
+    {
+      "id": "welcome",
+      "name": "Welcome Page",
+      "type": "page",
+      "description": "Initial landing page with centered search input and quick links to YouTube/Bilibili",
+      "regions": [
+        {
+          "id": "titlebar",
+          "role": "chrome",
+          "rect": { "x": 0, "y": 0, "w": 1920, "h": 52 },
+          "style": { "bg": "transparent" },
+          "children": [
+            {
+              "id": "left-controls",
+              "type": "button-group",
+              "rect": { "x": 82, "y": 14, "w": 28, "h": 28 },
+              "items": [
+                { "icon": "PanelLeft", "size": 16 }
+              ]
+            },
+            {
+              "id": "right-controls",
+              "type": "button-group",
+              "rect": { "x": 1864, "y": 14, "w": 60, "h": 28 },
+              "items": [
+                { "icon": "Settings", "size": 16 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "search-area",
+          "role": "main",
+          "rect": { "x": 560, "y": 440, "w": 800, "h": 200 },
+          "style": { "bg": "card" },
+          "children": [
+            {
+              "id": "search-input",
+              "type": "input",
+              "className": "bg-zinc-100 rounded-full py-4 px-5 pr-14 text-[15px] text-zinc-800 font-medium placeholder:text-zinc-400",
+              "placeholder": "Enter URL or search..."
+            },
+            {
+              "id": "submit-button",
+              "type": "button",
+              "className": "absolute right-2 p-2.5 rounded-full bg-zinc-900 text-white hover:bg-zinc-800",
+              "icon": "ArrowRight",
+              "iconSize": 16
+            }
+          ]
+        },
+        {
+          "id": "quick-links",
+          "role": "navigation",
+          "rect": { "x": 1680, "y": 1032, "w": 220, "h": 36 },
+          "style": { "bg": "transparent" },
+          "children": [
+            {
+              "id": "quick-link-items",
+              "type": "button-group",
+              "items": [
+                { "label": "YouTube", "icon": "icons8-youtube.svg" },
+                { "label": "Bilibili", "icon": "icons8-bilibili.svg" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "main-browser",
+      "name": "Browser Mode",
+      "type": "layout",
+      "description": "Three-column layout: sidebar + embedded browser + info panel with subtitles/assets",
+      "regions": [
+        {
+          "id": "titlebar",
+          "role": "chrome",
+          "rect": { "x": 0, "y": 0, "w": 1920, "h": 52 },
+          "style": { "bg": "transparent" },
+          "children": [
+            {
+              "id": "left-toggle",
+              "type": "button",
+              "rect": { "x": 82, "y": 14, "w": 28, "h": 28 },
+              "className": "p-1.5 bg-white/80 hover:bg-white text-gray-500 hover:text-gray-700 rounded-md",
+              "icon": "PanelLeft",
+              "iconSize": 16
+            },
+            {
+              "id": "right-controls",
+              "type": "button-group",
+              "rect": { "x": 1830, "y": 14, "w": 68, "h": 28 },
+              "items": [
+                { "icon": "PanelRight", "size": 16 },
+                { "icon": "Settings", "size": 16 }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "sidebar",
+          "role": "navigation",
+          "rect": { "x": 12, "y": 52, "w": 256, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl", "class": "floating-card" },
+          "children": [
+            {
+              "id": "logo",
+              "type": "image",
+              "rect": { "x": 24, "y": 68, "w": 80, "h": 10 },
+              "src": "verboo.svg"
+            },
+            {
+              "id": "nav-items",
+              "type": "list",
+              "rect": { "x": 20, "y": 100, "w": 228, "h": 120 },
+              "items": [
+                { "icon": "Package", "label": "Assets", "shortcut": null },
+                { "icon": "Subtitles", "label": "Subtitles", "shortcut": null }
+              ]
+            },
+            {
+              "id": "divider",
+              "type": "separator",
+              "className": "h-px bg-[#e4e4e7] mx-3 my-2"
+            },
+            {
+              "id": "video-actions",
+              "type": "list",
+              "rect": { "x": 20, "y": 240, "w": 228, "h": 180 },
+              "items": [
+                { "icon": "Download", "label": "Get Subtitles", "shortcut": null },
+                { "icon": "Camera", "label": "Screenshot", "shortcut": "\u2318S" },
+                { "icon": "Star", "label": "Important", "shortcut": "\u2318I", "iconColor": "#f59e0b" },
+                { "icon": "AlertTriangle", "label": "Difficult", "shortcut": "\u2318D", "iconColor": "#ef4444" }
+              ]
+            },
+            {
+              "id": "nav-toolbar",
+              "type": "toolbar",
+              "rect": { "x": 20, "y": 960, "w": 228, "h": 44 },
+              "className": "bg-white/90 backdrop-blur-md border border-gray-200 rounded-full px-4 py-2",
+              "children": [
+                { "icon": "ArrowLeft", "size": 16 },
+                { "icon": "ArrowRight", "size": 16 },
+                { "icon": "RotateCw", "size": 16 },
+                { "type": "input", "placeholder": "Enter URL..." }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "browser-content",
+          "role": "main",
+          "rect": { "x": 280, "y": 52, "w": 1296, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl", "class": "floating-card bg-dot-grid" },
+          "description": "Embedded WebContentsView showing YouTube/Bilibili/web content"
+        },
+        {
+          "id": "resizer",
+          "role": "divider",
+          "rect": { "x": 1576, "y": 52, "w": 12, "h": 1016 },
+          "style": { "cursor": "col-resize" },
+          "children": [
+            {
+              "id": "resizer-handle",
+              "type": "decorative",
+              "className": "w-1 h-8 rounded-full bg-gray-300 group-hover:h-12 group-hover:bg-gray-500"
+            }
+          ]
+        },
+        {
+          "id": "info-panel",
+          "role": "detail",
+          "rect": { "x": 1588, "y": 52, "w": 320, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl", "class": "floating-card" },
+          "children": [
+            {
+              "id": "panel-tabs",
+              "type": "tab-bar",
+              "rect": { "x": 1604, "y": 68, "w": 288, "h": 32 },
+              "items": [
+                { "icon": "FileText", "label": "Subtitle", "id": "subtitle" },
+                { "icon": "Image", "label": "Assets", "id": "asset", "badge": true }
+              ]
+            },
+            {
+              "id": "subtitle-search",
+              "type": "input",
+              "rect": { "x": 1604, "y": 112, "w": 240, "h": 32 },
+              "className": "h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg"
+            },
+            {
+              "id": "subtitle-list",
+              "type": "list",
+              "rect": { "x": 1588, "y": 156, "w": 320, "h": 912 },
+              "description": "Scrollable subtitle list with timestamps, auto-scroll follows video time"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "asset-library",
+      "name": "Asset Library",
+      "type": "page",
+      "description": "Full-width asset grid showing screenshots and content cards with filtering and batch operations",
+      "regions": [
+        {
+          "id": "sidebar",
+          "role": "navigation",
+          "rect": { "x": 12, "y": 52, "w": 256, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" }
+        },
+        {
+          "id": "asset-content",
+          "role": "main",
+          "rect": { "x": 280, "y": 52, "w": 1628, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" },
+          "children": [
+            {
+              "id": "asset-header",
+              "type": "header",
+              "rect": { "x": 296, "y": 64, "w": 1596, "h": 40 },
+              "children": [
+                { "type": "label", "text": "Assets" },
+                { "type": "button", "icon": "X", "action": "close" }
+              ]
+            },
+            {
+              "id": "filter-bar",
+              "type": "toolbar",
+              "rect": { "x": 312, "y": 116, "w": 1564, "h": 36 },
+              "description": "Filter pills: platform, sort order, mark type, search input, view mode toggle",
+              "children": [
+                { "type": "filter-pill", "icon": "Globe", "label": "Platform" },
+                { "type": "filter-pill", "icon": "ArrowDownUp", "label": "Sort" },
+                { "type": "filter-pill", "icon": "Star", "label": "Marks" },
+                { "type": "search-input", "icon": "Search" },
+                { "type": "view-toggle", "options": ["grid", "list"] }
+              ]
+            },
+            {
+              "id": "asset-grid",
+              "type": "grid",
+              "rect": { "x": 312, "y": 164, "w": 1564, "h": 892 },
+              "description": "Responsive card grid, 4-5 columns, each card with thumbnail, author, title, timestamp",
+              "columns": "repeat(auto-fill, minmax(280px, 1fr))",
+              "gap": 16
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "subtitle-library",
+      "name": "Subtitle Library",
+      "type": "page",
+      "description": "Full-width subtitle table with video selector, export options, and search",
+      "regions": [
+        {
+          "id": "sidebar",
+          "role": "navigation",
+          "rect": { "x": 12, "y": 52, "w": 256, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" }
+        },
+        {
+          "id": "subtitle-content",
+          "role": "main",
+          "rect": { "x": 280, "y": 52, "w": 1628, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" },
+          "children": [
+            {
+              "id": "subtitle-header",
+              "type": "header",
+              "rect": { "x": 296, "y": 64, "w": 1596, "h": 40 },
+              "children": [
+                { "type": "label", "text": "Subtitle Library" },
+                { "type": "button", "icon": "X" }
+              ]
+            },
+            {
+              "id": "subtitle-filter-bar",
+              "type": "toolbar",
+              "rect": { "x": 312, "y": 116, "w": 1564, "h": 36 },
+              "children": [
+                { "type": "filter-pill", "icon": "Video", "label": "Select Video" },
+                { "type": "divider" },
+                { "type": "filter-pill", "icon": "Download", "label": "Export" },
+                { "type": "spacer" },
+                { "type": "search-input", "width": 200 },
+                { "type": "count-label" }
+              ]
+            },
+            {
+              "id": "subtitle-table",
+              "type": "table",
+              "rect": { "x": 312, "y": 164, "w": 1564, "h": 892 },
+              "columns": [
+                { "id": "index", "label": "#", "width": 50 },
+                { "id": "time", "label": "Time", "width": 70 },
+                { "id": "content", "label": "Content", "flex": 1 },
+                { "id": "duration", "label": "Duration", "width": 60, "align": "right" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "learning-panel",
+      "name": "English Learning",
+      "type": "page",
+      "description": "Vocabulary analysis with word table, CEFR levels, exam tags, and subtitle highlighting",
+      "regions": [
+        {
+          "id": "sidebar",
+          "role": "navigation",
+          "rect": { "x": 12, "y": 52, "w": 256, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" }
+        },
+        {
+          "id": "learning-content",
+          "role": "main",
+          "rect": { "x": 280, "y": 52, "w": 1628, "h": 1016 },
+          "style": { "bg": "card", "radius": "xl" },
+          "children": [
+            {
+              "id": "learning-header",
+              "type": "header",
+              "rect": { "x": 296, "y": 64, "w": 1596, "h": 40 }
+            },
+            {
+              "id": "learning-filter-bar",
+              "type": "toolbar",
+              "rect": { "x": 312, "y": 116, "w": 1564, "h": 36 },
+              "children": [
+                { "type": "filter-pill", "icon": "Video", "label": "Select Video" },
+                { "type": "divider" },
+                { "type": "category-pills", "options": ["All", "CET-4", "CET-6", "TOEFL", "IELTS", "GRE"] },
+                { "type": "spacer" },
+                { "type": "search-input" },
+                { "type": "export-button" }
+              ]
+            },
+            {
+              "id": "word-table",
+              "type": "table",
+              "rect": { "x": 312, "y": 164, "w": 1628, "h": 892 },
+              "description": "Sortable vocabulary table with difficulty color coding, CEFR levels, and hover cards",
+              "columns": [
+                { "id": "word", "label": "Word" },
+                { "id": "phonetic", "label": "Phonetic" },
+                { "id": "definition", "label": "Definition" },
+                { "id": "cefr", "label": "CEFR" },
+                { "id": "difficulty", "label": "Difficulty" },
+                { "id": "tags", "label": "Exam Tags" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "components": {
+    "toast": {
+      "className": "flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg transition-all duration-200 ease-out",
+      "variants": {
+        "success": { "className": "bg-[#18181b] text-white", "icon": "CheckCircle2" },
+        "error": { "className": "bg-[#dc2626] text-white", "icon": "AlertCircle" },
+        "screenshot": { "className": "bg-[#18181b] text-white", "icon": "Camera" }
+      },
+      "iconSize": 16,
+      "textStyle": { "fontSize": 13, "fontWeight": 500 },
+      "positions": {
+        "top": "fixed top-[10px] left-1/2 -translate-x-1/2 z-[100]",
+        "bottom": "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100]"
+      },
+      "animation": {
+        "enter": "opacity-100 translate-y-0",
+        "exitTop": "opacity-0 -translate-y-2",
+        "exitBottom": "opacity-0 translate-y-2"
+      }
+    },
+    "navItem": {
+      "className": "group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors duration-150",
+      "states": {
+        "default": "hover:bg-[#f4f4f5]",
+        "active": "bg-[#f4f4f5]"
+      },
+      "iconSize": 14,
+      "iconColor": { "default": "text-gray-400", "active": "text-[#18181b]" },
+      "labelStyle": {
+        "className": "text-[13px] font-medium",
+        "color": { "default": "text-gray-500", "active": "text-[#18181b]" }
+      },
+      "shortcut": {
+        "className": "text-[10px] text-[#a1a1aa] font-mono"
+      }
+    },
+    "navToolbar": {
+      "className": "bg-white/90 backdrop-blur-md border border-gray-200 rounded-full px-4 py-2 flex items-center gap-3",
+      "navButton": {
+        "className": "p-1.5 rounded-full hover:bg-gray-100 transition-colors",
+        "disabled": "text-gray-300 cursor-not-allowed",
+        "enabled": "text-gray-600"
+      },
+      "urlInput": {
+        "className": "w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
+      }
+    },
+    "tab": {
+      "className": "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-all duration-150",
+      "states": {
+        "active": "bg-[#f4f4f5] text-[#18181b]",
+        "inactive": "text-[#71717a] hover:text-[#18181b] hover:bg-[#fafafa]"
+      },
+      "iconSize": 14
+    },
+    "badge": {
+      "className": "ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full",
+      "states": {
+        "active": "bg-[#18181b] text-white",
+        "inactive": "bg-[#e4e4e7] text-[#52525b]"
+      }
+    },
+    "assetCard": {
+      "className": "group relative bg-white border rounded-lg overflow-hidden hover:shadow-sm transition-all cursor-pointer",
+      "states": {
+        "default": "border-zinc-100 hover:border-zinc-200",
+        "selected": "border-blue-500 ring-2 ring-blue-500/20 shadow-md"
+      },
+      "children": {
+        "thumbnail": {
+          "className": "aspect-video bg-[#f4f4f5] relative overflow-hidden"
+        },
+        "timestampBadge": {
+          "className": "px-2 py-1 bg-black/75 text-white text-[11px] rounded font-mono flex items-center gap-1"
+        },
+        "title": {
+          "className": "text-[13px] font-medium text-[#18181b] line-clamp-2 mb-2"
+        },
+        "author": {
+          "className": "text-[11px] text-[#71717a] truncate"
+        },
+        "footer": {
+          "className": "flex items-center justify-between text-[11px] text-[#a1a1aa]"
+        },
+        "deleteButton": {
+          "className": "p-1 hover:bg-[#fef2f2] rounded text-[#dc2626]"
+        }
+      }
+    },
+    "subtitleItem": {
+      "className": "group px-4 py-2.5 transition-all duration-200 cursor-pointer",
+      "states": {
+        "default": "hover:bg-[#fafafa]/50",
+        "current": "bg-[#fafafa]",
+        "important": "bg-amber-50/70 border-l-2 border-amber-400",
+        "difficult": "bg-red-50/70 border-l-2 border-red-400"
+      },
+      "children": {
+        "timestamp": {
+          "className": "text-[11px] font-mono tabular-nums min-w-[42px]",
+          "color": { "default": "text-[#a1a1aa]", "current": "text-[#18181b]" }
+        },
+        "text": {
+          "className": "text-[13px] leading-[1.6]",
+          "color": { "default": "text-[#52525b]", "current": "text-[#18181b]" }
+        },
+        "translation": {
+          "className": "text-[12px] leading-[1.5]",
+          "color": { "default": "text-[#a1a1aa]", "current": "text-[#71717a]" }
+        }
+      }
+    },
+    "dialog": {
+      "overlay": "fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm",
+      "container": "bg-white rounded-xl shadow-2xl overflow-hidden",
+      "header": {
+        "className": "flex items-center justify-between px-6 py-4 border-b border-[#e4e4e7]",
+        "title": "text-[15px] font-semibold text-[#18181b]",
+        "closeButton": "p-1 text-[#71717a] hover:text-[#18181b] hover:bg-[#f4f4f5] rounded-md"
+      },
+      "footer": {
+        "className": "flex items-center justify-between px-5 py-3.5 border-t border-[#e4e4e7] bg-[#fafafa]"
+      }
+    },
+    "settingsDialog": {
+      "overlay": "fixed inset-0 z-[100] flex items-center justify-center",
+      "backdrop": "absolute inset-0 bg-black/20 backdrop-blur-sm",
+      "container": "relative w-[400px] max-h-[80vh] bg-white rounded-2xl shadow-2xl overflow-hidden",
+      "section": {
+        "header": "flex items-center gap-2 mb-3",
+        "headerIcon": "text-gray-400",
+        "headerText": "text-sm font-medium text-gray-500",
+        "content": "bg-gray-50 rounded-xl p-4"
+      },
+      "toggle": {
+        "className": "relative w-10 h-6 rounded-full transition-colors flex-shrink-0",
+        "on": "bg-blue-500",
+        "off": "bg-gray-300",
+        "thumb": "absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200"
+      }
+    },
+    "button": {
+      "primary": {
+        "className": "flex items-center gap-1.5 h-8 px-4 text-[13px] font-medium text-white bg-[#18181b] hover:bg-[#27272a] disabled:opacity-50 rounded-lg transition-all duration-150"
+      },
+      "secondary": {
+        "className": "h-8 px-3.5 text-[13px] font-medium text-[#52525b] hover:text-[#18181b] hover:bg-[#e4e4e7] rounded-lg transition-all duration-150"
+      },
+      "ghost": {
+        "className": "p-1.5 hover:bg-[#f4f4f5] rounded-lg transition-colors duration-150"
+      },
+      "danger": {
+        "className": "w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors"
+      },
+      "quickLink": {
+        "className": "flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-sm border border-zinc-200/60 rounded-full text-[13px] font-medium text-zinc-600 hover:bg-white hover:border-zinc-300/80 hover:text-zinc-900 transition-all duration-200"
+      }
+    },
+    "input": {
+      "search": {
+        "className": "w-full h-8 px-3 text-[13px] bg-[#f4f4f5] rounded-lg focus:outline-none focus:bg-[#e4e4e7] transition-all duration-150 placeholder:text-[#a1a1aa]"
+      },
+      "url": {
+        "className": "w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none font-medium"
+      },
+      "welcomeSearch": {
+        "className": "w-full py-4 px-5 pr-14 text-[15px] text-zinc-800 font-medium bg-transparent outline-none placeholder:text-zinc-400 placeholder:font-normal"
+      }
+    },
+    "filterPill": {
+      "className": "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex-none",
+      "states": {
+        "active": "bg-zinc-200/80 text-zinc-900",
+        "selected": "bg-blue-50 text-blue-600",
+        "default": "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+      }
+    },
+    "emptyState": {
+      "className": "h-full flex flex-col items-center justify-center gap-3",
+      "icon": { "size": 28, "strokeWidth": 1.5, "color": "text-[#e4e4e7]" },
+      "title": { "className": "text-[13px] font-medium text-[#71717a] mb-1" },
+      "description": { "className": "text-[12px] text-[#a1a1aa]" }
+    },
+    "searchHighlight": {
+      "className": "bg-[#fef08a] text-[#18181b] px-0.5 rounded-sm"
+    },
+    "floatingCard": {
+      "className": "bg-white rounded-2xl",
+      "variants": {
+        "default": "border-radius: 16px",
+        "left": "border-radius: 0 16px 16px 0",
+        "right": "border-radius: 16px 0 0 16px"
+      }
+    },
+    "dotGridBackground": {
+      "className": "bg-dot-grid",
+      "style": {
+        "backgroundSize": "24px 24px",
+        "backgroundImage": "radial-gradient(circle, #d0d0d0 1px, transparent 1px)"
+      }
+    },
+    "aiSubtitleBanner": {
+      "className": "flex items-center gap-3 px-4 py-3 bg-white rounded-xl border border-gray-200",
+      "indicator": "w-2 h-2 rounded-full bg-blue-500 animate-pulse",
+      "acceptButton": "px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg",
+      "dismissButton": "px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg"
+    },
+    "wordHoverCard": {
+      "className": "fixed z-[9999] w-[320px] bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden",
+      "header": "px-4 py-3 border-b",
+      "content": "px-4 py-3 max-h-[200px] overflow-y-auto",
+      "examTag": "px-1.5 py-0.5 text-[10px] text-gray-500 bg-gray-100 rounded"
+    }
+  },
+
+  "interactions": [
+    {
+      "id": "quick-capture",
+      "name": "Quick Screenshot",
+      "screen": "main-browser",
+      "trigger": { "type": "keyboard", "key": "\u2318S" },
+      "steps": [
+        { "action": "capture-video-frame", "description": "Capture current video frame via WCV" },
+        { "action": "save-to-database", "description": "Save screenshot with timestamp and subtitle data" },
+        { "action": "toast", "content": "Saved to screenshot library", "icon": "Camera", "type": "screenshot", "position": "top", "duration": "2s" },
+        { "action": "refresh-material-list", "target": "info-panel.tabs.asset" }
+      ]
+    },
+    {
+      "id": "mark-important",
+      "name": "Mark as Important",
+      "screen": "main-browser",
+      "trigger": { "type": "keyboard", "key": "\u2318I" },
+      "steps": [
+        { "action": "capture-video-frame" },
+        { "action": "save-with-mark", "markType": "important" },
+        { "action": "toast", "content": "Marked as important", "icon": "Camera", "type": "screenshot", "position": "top", "duration": "2s" },
+        { "action": "subtitle-highlight", "borderColor": "#f59e0b", "bgColor": "amber-50/70" }
+      ]
+    },
+    {
+      "id": "mark-difficult",
+      "name": "Mark as Difficult",
+      "screen": "main-browser",
+      "trigger": { "type": "keyboard", "key": "\u2318D" },
+      "steps": [
+        { "action": "capture-video-frame" },
+        { "action": "save-with-mark", "markType": "difficult" },
+        { "action": "toast", "content": "Marked as difficult", "icon": "Camera", "type": "screenshot", "position": "top", "duration": "2s" },
+        { "action": "subtitle-highlight", "borderColor": "#ef4444", "bgColor": "red-50/70" }
+      ]
+    },
+    {
+      "id": "navigate-url",
+      "name": "Navigate to URL",
+      "screen": "welcome",
+      "trigger": { "type": "form-submit", "target": "search-input" },
+      "steps": [
+        { "action": "welcome-exit-animation", "duration": "700ms", "easing": "ease-out", "scale": "0.98", "opacity": 0 },
+        { "action": "expand-sidebar", "duration": "300ms" },
+        { "action": "expand-right-panel", "duration": "300ms" },
+        { "action": "show-browser-view", "loadUrl": true },
+        { "action": "update-nav-toolbar", "showUrl": true }
+      ]
+    },
+    {
+      "id": "switch-to-assets",
+      "name": "Open Asset Library",
+      "screen": "main-browser",
+      "trigger": { "type": "click", "target": "sidebar.nav-items.assets" },
+      "steps": [
+        { "action": "pause-video" },
+        { "action": "hide-wcv", "description": "Hide WebContentsView" },
+        { "action": "switch-view", "mode": "asset" },
+        { "action": "show-full-panel", "panel": "asset-library", "animation": "fade-in" }
+      ]
+    },
+    {
+      "id": "subtitle-seek",
+      "name": "Click Subtitle to Seek",
+      "screen": "main-browser",
+      "trigger": { "type": "click", "target": "info-panel.subtitle-list.item" },
+      "steps": [
+        { "action": "seek-video", "time": "subtitle.start" },
+        { "action": "highlight-subtitle", "target": "clicked-item", "bg": "#fafafa" }
+      ]
+    },
+    {
+      "id": "get-subtitles",
+      "name": "Auto-fetch Subtitles",
+      "screen": "main-browser",
+      "trigger": { "type": "click", "target": "sidebar.get-subtitles" },
+      "steps": [
+        { "action": "pause-video" },
+        { "action": "open-dialog", "dialog": "subtitle-dialog" },
+        { "action": "detect-platform", "platforms": ["youtube", "bilibili"] },
+        { "action": "fetch-subtitles", "showLoader": true },
+        { "action": "toast", "content": "Subtitles loaded", "type": "success" },
+        { "action": "close-dialog" },
+        { "action": "populate-subtitle-list" }
+      ]
+    }
+  ],
+
+  "dataSources": {
+    "assets": {
+      "description": "User's captured screenshots and content from video learning sessions",
+      "schema": {
+        "id": "number",
+        "type": "'content' | 'screenshot'",
+        "platform": "string",
+        "title": "string",
+        "url": "string",
+        "author": "{ name: string, avatar?: string, profileUrl?: string }",
+        "favicon": "string",
+        "thumbnail": "string",
+        "typeData.timestamp": "number (seconds)",
+        "typeData.imageData": "string (base64)",
+        "typeData.markType": "'important' | 'difficult' | undefined",
+        "typeData.selectedSubtitles": "Array<{ start: number, end: number, text: string }>",
+        "createdAt": "Date"
+      },
+      "sampleData": [
+        {
+          "id": 1,
+          "type": "screenshot",
+          "platform": "youtube",
+          "title": "CS50 2024 - Lecture 0 - Scratch",
+          "url": "https://www.youtube.com/watch?v=3LPJfIKxwWc",
+          "author": { "name": "CS50", "avatar": "https://yt3.ggpht.com/example" },
+          "typeData": { "timestamp": 342, "markType": "important" },
+          "createdAt": "2025-03-15T10:30:00Z"
+        },
+        {
+          "id": 2,
+          "type": "screenshot",
+          "platform": "bilibili",
+          "title": "3Blue1Brown - Linear Algebra Explained Visually",
+          "url": "https://www.bilibili.com/video/BV1ys411472E",
+          "author": { "name": "3Blue1Brown" },
+          "typeData": { "timestamp": 128, "markType": "difficult", "selectedSubtitles": [{ "start": 125, "end": 132, "text": "The determinant of a matrix tells you how much areas get scaled" }] },
+          "createdAt": "2025-03-14T15:22:00Z"
+        },
+        {
+          "id": 3,
+          "type": "screenshot",
+          "platform": "youtube",
+          "title": "TED Talk - The Power of Vulnerability",
+          "url": "https://www.youtube.com/watch?v=iCvmsMzlF7o",
+          "author": { "name": "TED" },
+          "typeData": { "timestamp": 567 },
+          "createdAt": "2025-03-13T09:15:00Z"
+        },
+        {
+          "id": 4,
+          "type": "content",
+          "platform": "xiaohongshu",
+          "title": "IELTS Writing Tips - Task 2 Structure",
+          "url": "https://www.xiaohongshu.com/explore/abc123",
+          "author": { "name": "English Coach" },
+          "typeData": { "content": "IELTS Writing Task 2: Introduction → Body 1 → Body 2 → Conclusion...", "tags": ["IELTS", "Writing"], "images": [], "capturedAt": "2025-03-12T18:00:00Z" },
+          "createdAt": "2025-03-12T18:00:00Z"
+        },
+        {
+          "id": 5,
+          "type": "screenshot",
+          "platform": "youtube",
+          "title": "MIT OpenCourseWare - Introduction to Algorithms",
+          "url": "https://www.youtube.com/watch?v=HtSuA80QTyo",
+          "author": { "name": "MIT OpenCourseWare" },
+          "typeData": { "timestamp": 890, "markType": "important" },
+          "createdAt": "2025-03-11T14:45:00Z"
+        }
+      ]
+    },
+    "subtitles": {
+      "description": "Extracted subtitle data from video platforms, supporting bilingual display",
+      "schema": {
+        "id": "number",
+        "videoUrl": "string",
+        "videoTitle": "string",
+        "platform": "'youtube' | 'bilibili' | 'bilibili-ai' | 'import'",
+        "subtitleData": "Array<{ start: number, duration?: number, text: string, translation?: string }>",
+        "createdAt": "Date"
+      },
+      "sampleData": [
+        {
+          "id": 1,
+          "videoUrl": "https://www.youtube.com/watch?v=3LPJfIKxwWc",
+          "videoTitle": "CS50 2024 - Lecture 0 - Scratch",
+          "platform": "youtube",
+          "subtitleData": [
+            { "start": 0, "duration": 4.5, "text": "All right, this is CS50.", "translation": "好的，这是CS50。" },
+            { "start": 4.5, "duration": 3.2, "text": "And this is the start of a journey.", "translation": "这是一段旅程的开始。" },
+            { "start": 7.7, "duration": 5.1, "text": "Whereby when you leave this course, you'll be able to do things you couldn't before.", "translation": "学完这门课后，你将能做到以前做不到的事情。" },
+            { "start": 12.8, "duration": 4.0, "text": "You'll understand computational thinking.", "translation": "你将理解计算思维。" },
+            { "start": 16.8, "duration": 3.5, "text": "You'll be able to solve problems more effectively.", "translation": "你将能够更有效地解决问题。" }
+          ],
+          "createdAt": "2025-03-15T10:00:00Z"
+        },
+        {
+          "id": 2,
+          "videoUrl": "https://www.bilibili.com/video/BV1ys411472E",
+          "videoTitle": "3Blue1Brown - Linear Algebra Explained Visually",
+          "platform": "bilibili",
+          "subtitleData": [
+            { "start": 0, "duration": 3.0, "text": "Hey everyone, welcome back." },
+            { "start": 3.0, "duration": 4.5, "text": "Today we're going to talk about linear transformations." },
+            { "start": 7.5, "duration": 5.0, "text": "The key insight is that every linear transformation can be described by a matrix." },
+            { "start": 12.5, "duration": 4.0, "text": "And conversely, every matrix represents some linear transformation." }
+          ],
+          "createdAt": "2025-03-14T15:00:00Z"
+        },
+        {
+          "id": 3,
+          "videoUrl": "https://www.youtube.com/watch?v=iCvmsMzlF7o",
+          "videoTitle": "TED Talk - The Power of Vulnerability",
+          "platform": "youtube",
+          "subtitleData": [
+            { "start": 0, "duration": 5.2, "text": "So, I'll start with this: a couple years ago, an event planner called me.", "translation": "那么，我从这里开始：几年前，一位活动策划人联系了我。" },
+            { "start": 5.2, "duration": 4.8, "text": "Because I was going to do a speaking event.", "translation": "因为我即将做一个演讲活动。" },
+            { "start": 10.0, "duration": 6.0, "text": "And she said, I'm really struggling with how to write about you on the little flyer.", "translation": "她说，我真的很纠结该怎么在宣传单上介绍你。" }
+          ],
+          "createdAt": "2025-03-13T09:00:00Z"
+        }
+      ]
+    },
+    "vocabulary": {
+      "description": "English vocabulary database with CEFR levels, exam tags, and difficulty analysis",
+      "schema": {
+        "word": "string",
+        "difficulty": "'low' | 'medium' | 'high'",
+        "info.word": "string",
+        "info.phonetic": "string",
+        "info.pos": "string (n. / v. / adj. / adv.)",
+        "info.definitionCn": "string",
+        "info.definitionEn": "string",
+        "info.cefrLevel": "'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'",
+        "info.collinsStar": "number (1-5)",
+        "info.cocaRank": "number",
+        "info.isCet4": "boolean",
+        "info.isCet6": "boolean",
+        "info.isToefl": "boolean",
+        "info.isIelts": "boolean",
+        "info.isGre": "boolean",
+        "info.isOxford3000": "boolean"
+      },
+      "sampleData": [
+        {
+          "word": "vulnerability",
+          "difficulty": "high",
+          "info": { "word": "vulnerability", "phonetic": "/ˌvʌlnərəˈbɪləti/", "pos": "n.", "definitionCn": "脆弱性；易受伤害", "definitionEn": "the quality of being easily hurt or attacked", "cefrLevel": "C1", "collinsStar": 3, "cocaRank": 3200, "isCet6": true, "isToefl": true, "isIelts": true, "isGre": true, "isOxford3000": false }
+        },
+        {
+          "word": "determinant",
+          "difficulty": "high",
+          "info": { "word": "determinant", "phonetic": "/dɪˈtɜːrmɪnənt/", "pos": "n.", "definitionCn": "决定因素；行列式", "definitionEn": "a factor that decisively affects the nature of something", "cefrLevel": "C1", "collinsStar": 2, "cocaRank": 8500, "isCet6": true, "isToefl": true, "isIelts": false, "isGre": true, "isOxford3000": false }
+        },
+        {
+          "word": "transformation",
+          "difficulty": "medium",
+          "info": { "word": "transformation", "phonetic": "/ˌtrænsfərˈmeɪʃən/", "pos": "n.", "definitionCn": "转变；变换", "definitionEn": "a thorough or dramatic change in form or appearance", "cefrLevel": "B2", "collinsStar": 4, "cocaRank": 2100, "isCet4": true, "isCet6": true, "isToefl": true, "isIelts": true, "isGre": false, "isOxford3000": true }
+        },
+        {
+          "word": "computational",
+          "difficulty": "high",
+          "info": { "word": "computational", "phonetic": "/ˌkɒmpjuˈteɪʃənl/", "pos": "adj.", "definitionCn": "计算的；计算机的", "definitionEn": "relating to or using computers or computation", "cefrLevel": "C1", "collinsStar": 2, "cocaRank": 6800, "isCet6": true, "isToefl": true, "isIelts": false, "isGre": true, "isOxford3000": false }
+        },
+        {
+          "word": "effectively",
+          "difficulty": "low",
+          "info": { "word": "effectively", "phonetic": "/ɪˈfektɪvli/", "pos": "adv.", "definitionCn": "有效地；实际上", "definitionEn": "in a way that is successful and achieves what you want", "cefrLevel": "B1", "collinsStar": 5, "cocaRank": 890, "isCet4": true, "isCet6": true, "isToefl": true, "isIelts": true, "isGre": false, "isOxford3000": true }
+        },
+        {
+          "word": "conversely",
+          "difficulty": "medium",
+          "info": { "word": "conversely", "phonetic": "/ˈkɒnvɜːsli/", "pos": "adv.", "definitionCn": "相反地", "definitionEn": "in a way that is the opposite of something", "cefrLevel": "B2", "collinsStar": 3, "cocaRank": 4200, "isCet4": false, "isCet6": true, "isToefl": true, "isIelts": true, "isGre": true, "isOxford3000": false }
+        }
+      ]
+    }
+  }
+}
