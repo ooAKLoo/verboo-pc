@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session, ipcMain, Menu, MenuItem, WebContentsView, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import nodeFetch from 'node-fetch';
 import { t, setLocale, loadLocaleFromStorage, saveLocaleToStorage, type Locale } from './i18n';
 
 // 自动更新 (仅在生产环境启用)
@@ -696,6 +697,57 @@ function setupIpcHandlers() {
                 success: false,
                 error: (error as Error).message
             };
+        }
+    });
+
+    // Proxy fetch for Bilibili subtitle URL (avoid renderer-side CORS issues)
+    ipcMain.handle('fetch-bilibili-subtitle', async (event, payload: { url: string; referer?: string }) => {
+        try {
+            const url = payload?.url;
+            if (!url || typeof url !== 'string') {
+                return { success: false, error: '无效的字幕URL' };
+            }
+
+            const senderSession = event.sender.session;
+            const cookies = await senderSession.cookies.get({ url });
+            const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+            let normalizedReferer = 'https://www.bilibili.com/';
+            if (payload?.referer) {
+                try {
+                    normalizedReferer = `${new URL(payload.referer).origin}/`;
+                } catch {
+                    // Keep default referer when payload referer is invalid
+                }
+            }
+
+            const headers: Record<string, string> = {
+                Accept: 'application/json, text/plain, */*',
+                'User-Agent': getChromeUserAgent()
+            };
+            if (cookieHeader) {
+                headers.Cookie = cookieHeader;
+            }
+            headers.Referer = normalizedReferer;
+            headers.Origin = 'https://www.bilibili.com';
+
+            console.log('[IPC] fetch-bilibili-subtitle proxy:', url);
+            console.log('[IPC] fetch-bilibili-subtitle headers:', {
+                referer: headers.Referer,
+                hasCookie: !!headers.Cookie
+            });
+
+            const response = await nodeFetch(url, { method: 'GET', headers });
+            console.log('[IPC] fetch-bilibili-subtitle status:', response.status);
+
+            if (!response.ok) {
+                return { success: false, error: `HTTP ${response.status}` };
+            }
+
+            const data = await response.json();
+            return { success: true, data };
+        } catch (error) {
+            console.error('[IPC] fetch-bilibili-subtitle failed:', error);
+            return { success: false, error: (error as Error).message };
         }
     });
 

@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BilibiliAdapter = void 0;
 const registry_1 = require("./registry");
+const electron_1 = require("electron");
 class BilibiliAdapter {
     platform = {
         id: 'bilibili',
@@ -155,38 +156,319 @@ class BilibiliAdapter {
         return null;
     }
     /**
-     * Extract subtitles from Bilibili AI assistant
-     * Uses the same approach as the bilibili-subtitle userscript:
-     * 1. Click AI assistant to open panel
-     * 2. Click "字幕列表" button
-     * 3. Extract subtitles from DOM
+     * Extract subtitles from Bilibili.
+     * Strategy:
+     * 1) API-first (x/web-interface/view + x/player/wbi/v2 + subtitle_url JSON)
+     * 2) Fallback to AI panel DOM extraction when API path fails
      */
     async extractSubtitles() {
+        console.log('[BilibiliAdapter] Starting subtitle extraction...');
+        const errors = [];
+        const debugSteps = [];
+        const debug = (step, detail) => {
+            const message = detail ? `${step}: ${detail}` : step;
+            debugSteps.push(message);
+            console.log('[BilibiliAdapter][Debug]', message);
+        };
+        debug('开始提取', window.location.href);
+        try {
+            const apiSubtitles = await this.extractSubtitlesViaApi(debug);
+            if (apiSubtitles.length > 0) {
+                console.log('[BilibiliAdapter] API extraction success:', apiSubtitles.length);
+                debug('API提取成功', `字幕条数=${apiSubtitles.length}`);
+                return apiSubtitles;
+            }
+            errors.push('API未返回字幕数据');
+            debug('API提取结果为空');
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn('[BilibiliAdapter] API extraction failed:', message);
+            errors.push(`API失败: ${message}`);
+            debug('API提取失败', message);
+        }
+        try {
+            const domSubtitles = await this.extractSubtitlesViaAIPanel(debug);
+            if (domSubtitles.length > 0) {
+                debug('AI面板提取成功', `字幕条数=${domSubtitles.length}`);
+                return domSubtitles;
+            }
+            errors.push('AI面板未提取到字幕');
+            debug('AI面板提取结果为空');
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn('[BilibiliAdapter] AI panel extraction failed:', message);
+            errors.push(`AI面板失败: ${message}`);
+            debug('AI面板提取失败', message);
+        }
+        const debugSummary = this.buildDebugSummary(debugSteps);
+        throw new Error(`${errors.join('；') || '未能提取到字幕'}${debugSummary ? ` [调试: ${debugSummary}]` : ''}`);
+    }
+    /**
+     * API-first extraction, similar to bilibili-subtitle extension.
+     */
+    async extractSubtitlesViaApi(debug) {
+        debug?.('API流程开始');
+        const identifiers = await this.resolveVideoIdentifiers(debug);
+        debug?.('视频标识', `aid=${identifiers.aid ?? 'null'}, cid=${identifiers.cid ?? 'null'}`);
+        if (!identifiers.aid || !identifiers.cid) {
+            throw new Error('无法解析视频 aid/cid');
+        }
+        const wbiUrl = `https://api.bilibili.com/x/player/wbi/v2?aid=${identifiers.aid}&cid=${identifiers.cid}`;
+        const meta = await this.fetchJson(wbiUrl, debug, 'wbi/v2');
+        const subtitleInfos = Array.isArray(meta?.data?.subtitle?.subtitles)
+            ? meta.data.subtitle.subtitles.filter(info => !!info?.subtitle_url)
+            : [];
+        debug?.('可用字幕轨道数', String(subtitleInfos.length));
+        if (subtitleInfos.length === 0) {
+            throw new Error('该视频没有可用字幕');
+        }
+        const targetSubtitle = this.pickPreferredSubtitle(subtitleInfos);
+        const subtitleUrl = this.normalizeSubtitleUrl(targetSubtitle.subtitle_url || '');
+        debug?.('选中字幕轨道', `${targetSubtitle.lan_doc || targetSubtitle.lan || 'unknown'} -> ${subtitleUrl || 'empty'}`);
+        if (!subtitleUrl) {
+            throw new Error('字幕地址无效');
+        }
+        const subtitleJson = await this.fetchJson(subtitleUrl, debug, 'subtitle_url');
+        const subtitles = this.parseSubtitlePayload(subtitleJson, debug);
+        debug?.('API字幕解析条数', String(subtitles.length));
+        if (subtitles.length === 0) {
+            throw new Error('字幕内容为空');
+        }
+        return subtitles;
+    }
+    /**
+     * Resolve aid/cid from current page URL via Bilibili APIs.
+     */
+    async resolveVideoIdentifiers(debug) {
+        const currentUrl = new URL(window.location.href);
+        const currentPage = this.getCurrentPage(currentUrl);
+        debug?.('解析页面参数', `url=${currentUrl.href}, p=${currentPage}`);
+        const pathBvid = this.getBvidFromUrl(currentUrl);
+        if (pathBvid) {
+            debug?.('识别到BVID', pathBvid);
+            const viewUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(pathBvid)}`;
+            const view = await this.fetchJson(viewUrl, debug, 'web-interface/view');
+            const aid = Number(view?.data?.aid);
+            const pages = Array.isArray(view?.data?.pages) ? view.data.pages : [];
+            const matchedPage = pages.find(page => Number(page?.page) === currentPage) || pages[0];
+            const cid = Number(matchedPage?.cid || view?.data?.cid || currentUrl.searchParams.get('oid'));
+            debug?.('BVID解析结果', `pages=${pages.length}, aid=${aid || 'null'}, cid=${cid || 'null'}`);
+            return {
+                aid: Number.isFinite(aid) ? aid : undefined,
+                cid: Number.isFinite(cid) ? cid : undefined,
+            };
+        }
+        const aid = this.getAidFromUrl(currentUrl);
+        debug?.('尝试AVID解析', `aid=${aid ?? 'null'}`);
+        if (!aid) {
+            debug?.('无法从URL解析到aid/bvid');
+            return {};
+        }
+        const pagelistUrl = `https://api.bilibili.com/x/player/pagelist?aid=${aid}`;
+        const pagelist = await this.fetchJson(pagelistUrl, debug, 'player/pagelist');
+        const pages = Array.isArray(pagelist?.data) ? pagelist.data : [];
+        const matchedPage = pages.find(page => Number(page?.page) === currentPage) || pages[0];
+        const cid = Number(matchedPage?.cid || currentUrl.searchParams.get('oid'));
+        debug?.('AVID解析结果', `pages=${pages.length}, aid=${aid}, cid=${cid || 'null'}`);
+        return {
+            aid,
+            cid: Number.isFinite(cid) ? cid : undefined,
+        };
+    }
+    getCurrentPage(url) {
+        const page = Number(url.searchParams.get('p') || '1');
+        return Number.isFinite(page) && page > 0 ? page : 1;
+    }
+    getBvidFromUrl(url) {
+        const searchBvid = url.searchParams.get('bvid');
+        if (searchBvid && /^BV/i.test(searchBvid)) {
+            return searchBvid;
+        }
+        const parts = url.pathname.replace(/\/+$/, '').split('/');
+        const last = parts[parts.length - 1] || '';
+        if (/^BV/i.test(last)) {
+            return last;
+        }
+        return null;
+    }
+    getAidFromUrl(url) {
+        const parts = url.pathname.replace(/\/+$/, '').split('/');
+        const last = parts[parts.length - 1] || '';
+        if (/^av\d+$/i.test(last)) {
+            const aid = Number(last.slice(2));
+            return Number.isFinite(aid) ? aid : null;
+        }
+        if (/^\d+$/.test(last)) {
+            const aid = Number(last);
+            return Number.isFinite(aid) ? aid : null;
+        }
+        return null;
+    }
+    pickPreferredSubtitle(infos) {
+        const languagePreference = [
+            navigator.language?.toLowerCase() || '',
+            'zh-cn',
+            'zh-hans',
+            'zh-hant',
+            'zh',
+            'en'
+        ];
+        const normalized = infos.map(info => ({
+            info,
+            lang: `${info.lan || ''} ${info.lan_doc || ''}`.toLowerCase()
+        }));
+        for (const preferred of languagePreference) {
+            if (!preferred)
+                continue;
+            const matched = normalized.find(item => item.lang.includes(preferred));
+            if (matched)
+                return matched.info;
+        }
+        return infos[0];
+    }
+    normalizeSubtitleUrl(url) {
+        if (!url)
+            return '';
+        if (url.startsWith('//'))
+            return `https:${url}`;
+        if (url.startsWith('http://'))
+            return url.replace('http://', 'https://');
+        if (/^https?:\/\//.test(url))
+            return url;
+        try {
+            return new URL(url, window.location.origin).toString();
+        }
+        catch {
+            return '';
+        }
+    }
+    parseSubtitlePayload(data, debug) {
+        const bodyInfo = this.getSubtitleBody(data);
+        if (!bodyInfo) {
+            debug?.('字幕body缺失', '未找到 body/data.body/data.subtitle.body');
+            return [];
+        }
+        debug?.('字幕body来源', bodyInfo.source);
+        return bodyInfo.body.map((item) => {
+            const start = Number(item?.from ?? item?.start ?? 0);
+            const end = Number(item?.to ?? item?.end ?? start);
+            const text = String(item?.content ?? '').trim();
+            return {
+                start: Number.isFinite(start) ? start : 0,
+                duration: Number.isFinite(end - start) ? Math.max(end - start, 0) : 0,
+                text
+            };
+        }).filter((item) => item.text.length > 0);
+    }
+    async fetchJson(url, debug, label = 'request') {
+        if (this.shouldUseMainProcessProxy(url)) {
+            debug?.(`请求改走主进程(${label})`, url);
+            const response = await electron_1.ipcRenderer.invoke('fetch-bilibili-subtitle', {
+                url,
+                referer: window.location.href
+            });
+            if (!response?.success) {
+                throw new Error(response?.error || '主进程代拉失败');
+            }
+            return response.data;
+        }
+        debug?.(`请求开始(${label})`, url);
+        const response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                Accept: 'application/json, text/plain, */*'
+            }
+        });
+        debug?.(`请求状态(${label})`, String(response.status));
+        if (!response.ok) {
+            throw new Error(`请求失败: ${response.status}`);
+        }
+        const data = await response.json();
+        if (this.isBilibiliApiResponse(data) && data.code !== 0) {
+            debug?.(`接口返回错误(${label})`, `code=${data.code}, message=${data.message || data.msg || ''}`);
+            throw new Error(data.message || data.msg || `接口错误: ${data.code}`);
+        }
+        return data;
+    }
+    shouldUseMainProcessProxy(url) {
+        try {
+            const parsed = new URL(url);
+            return parsed.hostname.includes('aisubtitle.hdslb.com');
+        }
+        catch {
+            return false;
+        }
+    }
+    getSubtitleBody(data) {
+        if (!this.isRecord(data))
+            return null;
+        const directBody = data.body;
+        if (Array.isArray(directBody)) {
+            return { body: directBody, source: 'body' };
+        }
+        const nestedData = data.data;
+        if (!this.isRecord(nestedData))
+            return null;
+        const nestedBody = nestedData.body;
+        if (Array.isArray(nestedBody)) {
+            return { body: nestedBody, source: 'data.body' };
+        }
+        const nestedSubtitle = nestedData.subtitle;
+        if (!this.isRecord(nestedSubtitle))
+            return null;
+        if (!Array.isArray(nestedSubtitle.body))
+            return null;
+        return { body: nestedSubtitle.body, source: 'data.subtitle.body' };
+    }
+    isRecord(value) {
+        return typeof value === 'object' && value !== null;
+    }
+    isBilibiliApiResponse(value) {
+        if (!this.isRecord(value))
+            return false;
+        return typeof value.code === 'number';
+    }
+    buildDebugSummary(steps) {
+        if (steps.length === 0)
+            return '';
+        return steps.slice(-12).join(' -> ');
+    }
+    /**
+     * Fallback: Extract subtitles from Bilibili AI assistant panel DOM.
+     */
+    async extractSubtitlesViaAIPanel(debug) {
+        debug?.('进入AI面板回退流程');
         return new Promise((resolve, reject) => {
-            console.log('[BilibiliAdapter] Starting subtitle extraction...');
             // Step 1: Find and click AI assistant button
             const aiAssistantContainer = document.querySelector('.video-ai-assistant');
             if (!aiAssistantContainer) {
+                debug?.('AI按钮未找到');
                 reject(new Error('无法找到AI小助手按钮'));
                 return;
             }
             aiAssistantContainer.click();
             console.log('[BilibiliAdapter] Clicked AI assistant');
+            debug?.('已点击AI小助手');
             // Step 2: Wait for panel to load, then click subtitle list button
             setTimeout(() => {
                 const subtitleListButton = this.findSubtitleListButton();
                 if (!subtitleListButton) {
                     this.closeAIPanel();
+                    debug?.('字幕列表按钮未找到');
                     reject(new Error('无法找到"字幕列表"按钮，请确保AI小助手面板已正确加载'));
                     return;
                 }
                 console.log('[BilibiliAdapter] Found subtitle list button, clicking...');
                 subtitleListButton.click();
+                debug?.('已点击字幕列表按钮');
                 // Step 3: Wait for subtitles to load, then extract
                 setTimeout(() => {
                     try {
                         const subtitles = this.extractSubtitlesFromDOM();
                         this.closeAIPanel();
+                        debug?.('DOM提取条数', String(subtitles.length));
                         if (subtitles.length === 0) {
                             reject(new Error('未能提取到字幕，请确保视频有AI字幕'));
                             return;
