@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Asset, ScreenshotTypeData } from './AssetCard';
 import { FileText, SearchX, FileX, Sparkles, Star, AlertTriangle, Image, Clock, Play, Trash2 } from 'lucide-react';
 import { useTranslation } from '../contexts/I18nContext';
+import { motion, AnimatePresence } from 'motion/react';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -417,69 +418,100 @@ ${subtitleText}
                 <div className="flex-1 overflow-auto">
                     {videoAssets.length > 0 ? (
                         <div className="p-3 space-y-2">
-                            {videoAssets.map((asset) => {
-                                const typeData = asset.typeData as ScreenshotTypeData;
-                                const thumbnail = typeData.finalImageData || typeData.imageData;
+                            <AnimatePresence initial={false}>
+                                {videoAssets.map((asset) => {
+                                    const typeData = asset.typeData as ScreenshotTypeData;
+                                    const thumbnail = typeData.finalImageData || typeData.imageData;
 
-                                return (
-                                    <div
-                                        key={asset.id}
-                                        onClick={() => {
-                                            if (onSeekTo && typeData.timestamp !== undefined) {
-                                                onSeekTo(typeData.timestamp);
-                                            }
-                                        }}
-                                        className={`group relative bg-[#fafafa] rounded-lg overflow-hidden hover:bg-[#f4f4f5] transition-colors ${
-                                            onSeekTo ? 'cursor-pointer' : ''
-                                        }`}
-                                    >
-                                        {/* Thumbnail */}
-                                        <div className="flex gap-3 p-2">
-                                            <div className="w-24 h-14 flex-shrink-0 rounded overflow-hidden bg-[#18181b]">
-                                                <img
-                                                    src={thumbnail}
-                                                    alt={asset.title}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            </div>
-                                            <div className="flex-1 min-w-0 py-0.5">
-                                                {/* Timestamp */}
-                                                <div className="flex items-center gap-1.5 text-[11px] text-[#71717a] mb-1">
-                                                    <Play size={10} fill="currentColor" />
-                                                    <span className="font-mono">{formatTime(typeData.timestamp)}</span>
+                                    // 15 frames ≈ 250ms at 60fps
+                                    const metadataDelay = 15 / 60;
+
+                                    return (
+                                        <motion.div
+                                            key={asset.id}
+                                            layout
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 0.8, opacity: 0 }}
+                                            transition={{
+                                                scale: {
+                                                    type: 'spring',
+                                                    damping: 20,
+                                                    stiffness: 150,
+                                                    mass: 0.6,
+                                                },
+                                                opacity: {
+                                                    duration: 8 / 60, // 8 frames at 60fps
+                                                    ease: 'easeOut',
+                                                },
+                                            }}
+                                            onClick={() => {
+                                                if (onSeekTo && typeData.timestamp !== undefined) {
+                                                    onSeekTo(typeData.timestamp);
+                                                }
+                                            }}
+                                            className={`group relative bg-[#fafafa] rounded-lg overflow-hidden hover:bg-[#f4f4f5] transition-colors ${
+                                                onSeekTo ? 'cursor-pointer' : ''
+                                            }`}
+                                        >
+                                            {/* Thumbnail */}
+                                            <div className="flex gap-3 p-2">
+                                                <div className="w-24 h-14 flex-shrink-0 rounded overflow-hidden bg-[#18181b]">
+                                                    <img
+                                                        src={thumbnail}
+                                                        alt={asset.title}
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                 </div>
-                                                {/* Subtitle if exists */}
-                                                {typeData.selectedSubtitles && typeData.selectedSubtitles.length > 0 && (
-                                                    <div className="text-[12px] text-[#52525b] line-clamp-2 leading-relaxed">
-                                                        {typeData.selectedSubtitles[0].text}
+                                                {/* Metadata with delayed reveal */}
+                                                <motion.div
+                                                    className="flex-1 min-w-0 py-0.5"
+                                                    initial={{ opacity: 0, x: -8 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{
+                                                        delay: metadataDelay,
+                                                        duration: 0.25,
+                                                        ease: [0.33, 1, 0.68, 1], // cubic-out
+                                                    }}
+                                                >
+                                                    {/* Timestamp */}
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-[#71717a] mb-1">
+                                                        <Play size={10} fill="currentColor" />
+                                                        <span className="font-mono">{formatTime(typeData.timestamp)}</span>
                                                     </div>
-                                                )}
-                                                {/* Created time */}
-                                                <div className="flex items-center gap-1 text-[10px] text-[#a1a1aa] mt-1">
-                                                    <Clock size={10} />
-                                                    {new Date(asset.createdAt).toLocaleString('zh-CN', {
-                                                        month: '2-digit',
-                                                        day: '2-digit',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit'
-                                                    })}
-                                                </div>
+                                                    {/* Subtitle if exists */}
+                                                    {typeData.selectedSubtitles && typeData.selectedSubtitles.length > 0 && (
+                                                        <div className="text-[12px] text-[#52525b] line-clamp-2 leading-relaxed">
+                                                            {typeData.selectedSubtitles[0].text}
+                                                        </div>
+                                                    )}
+                                                    {/* Created time */}
+                                                    <div className="flex items-center gap-1 text-[10px] text-[#a1a1aa] mt-1">
+                                                        <Clock size={10} />
+                                                        {new Date(asset.createdAt).toLocaleString('zh-CN', {
+                                                            month: '2-digit',
+                                                            day: '2-digit',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </div>
+                                                </motion.div>
+                                                {/* Delete button */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteAsset(asset.id);
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-[#fef2f2] rounded text-[#dc2626] transition-all self-center"
+                                                    title="删除"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
                                             </div>
-                                            {/* Delete button */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteAsset(asset.id);
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-[#fef2f2] rounded text-[#dc2626] transition-all self-center"
-                                                title="删除"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                        </motion.div>
+                                    );
+                                })}
+                            </AnimatePresence>
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center gap-3">

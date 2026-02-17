@@ -184,10 +184,9 @@ export function AppProvider({ children, ipcRenderer }: AppProviderProps) {
       pendingSeekRef.current = seekTo;
     }
 
-    // 首次导航时展开面板
+    // 首次导航时展开左侧面板（右侧 InfoPanel 不自动弹出）
     if (!hasNavigated) {
       setLeftCollapsed(false);
-      setRightCollapsed(false);
     }
 
     if (viewMode === 'welcome') {
