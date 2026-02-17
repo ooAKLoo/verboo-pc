@@ -145,3 +145,39 @@ jobs:
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 上传到阿里云 OSS（国内加速下载）
+      - name: Setup aliyun ossutil
+        uses: manyuanrong/setup-ossutil@v3.0
+        with:
+          endpoint: ${{ secrets.OSS_ENDPOINT }}
+          access-key-id: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          access-key-secret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+
+      - name: Upload to Aliyun OSS
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+
+          # 上传到 /releases/<version>/ 目录
+          ossutil cp -r artifacts/ oss://${{ secrets.OSS_BUCKET }}/releases/${VERSION}/ \
+            --include "*.exe" \
+            --include "*.blockmap" \
+            --include "*.dmg" \
+            --include "*.zip" \
+            --include "*.AppImage" \
+            --include "*.deb" \
+            --include "*.rpm" \
+            --include "latest*.yml" \
+            --flat
+
+          # 同时复制到 /releases/latest/ 供自动更新使用
+          ossutil cp -r artifacts/ oss://${{ secrets.OSS_BUCKET }}/releases/latest/ \
+            --include "*.exe" \
+            --include "*.blockmap" \
+            --include "*.dmg" \
+            --include "*.zip" \
+            --include "*.AppImage" \
+            --include "*.deb" \
+            --include "*.rpm" \
+            --include "latest*.yml" \
+            --flat
