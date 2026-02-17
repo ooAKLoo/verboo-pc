@@ -154,30 +154,23 @@ jobs:
           access-key-id: ${{ secrets.OSS_ACCESS_KEY_ID }}
           access-key-secret: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
 
+      - name: Flatten artifacts
+        run: |
+          mkdir -p upload
+          find artifacts/ -type f \( \
+            -name "*.exe" -o -name "*.blockmap" -o -name "*.dmg" -o \
+            -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o \
+            -name "*.rpm" -o -name "latest*.yml" \
+          \) -exec cp {} upload/ \;
+          echo "Files to upload:"
+          ls -lh upload/
+
       - name: Upload to Aliyun OSS
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
 
           # 上传到 /releases/<version>/ 目录
-          ossutil cp -r artifacts/ oss://${{ secrets.OSS_BUCKET }}/releases/${VERSION}/ \
-            --include "*.exe" \
-            --include "*.blockmap" \
-            --include "*.dmg" \
-            --include "*.zip" \
-            --include "*.AppImage" \
-            --include "*.deb" \
-            --include "*.rpm" \
-            --include "latest*.yml" \
-            --flat
+          ossutil cp -rf upload/ oss://${{ secrets.OSS_BUCKET }}/releases/${VERSION}/
 
           # 同时复制到 /releases/latest/ 供自动更新使用
-          ossutil cp -r artifacts/ oss://${{ secrets.OSS_BUCKET }}/releases/latest/ \
-            --include "*.exe" \
-            --include "*.blockmap" \
-            --include "*.dmg" \
-            --include "*.zip" \
-            --include "*.AppImage" \
-            --include "*.deb" \
-            --include "*.rpm" \
-            --include "latest*.yml" \
-            --flat
+          ossutil cp -rf upload/ oss://${{ secrets.OSS_BUCKET }}/releases/latest/
