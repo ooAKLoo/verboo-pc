@@ -165,6 +165,47 @@ jobs:
           echo "Files to upload:"
           ls -lh upload/
 
+      - name: Generate download links file
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION_NUM=${VERSION#v}
+          OSS_BASE="https://verboo.oss-cn-shanghai.aliyuncs.com/releases"
+          GITHUB_BASE="https://github.com/ooAKLoo/verboo-pc/releases/download/${VERSION}"
+          GITHUB_RELEASE="https://github.com/ooAKLoo/verboo-pc/releases/tag/${VERSION}"
+
+          cat > upload/download.md << EOF
+          # Verboo ${VERSION} 下载链接
+
+          ---
+
+          ## 🇨🇳 中国用户（国内高速下载）
+
+          **Windows:** ${OSS_BASE}/latest/Verboo.Setup.${VERSION_NUM}.exe
+          **macOS (Apple Silicon):** ${OSS_BASE}/latest/Verboo-${VERSION_NUM}-arm64.dmg
+          **Linux (AppImage):** ${OSS_BASE}/latest/Verboo-${VERSION_NUM}.AppImage
+          **Linux (deb):** ${OSS_BASE}/latest/verboo_${VERSION_NUM}_amd64.deb
+
+          ---
+
+          ## 🌍 International Users (GitHub Download)
+
+          **Windows:** ${GITHUB_BASE}/Verboo.Setup.${VERSION_NUM}.exe
+          **macOS (Apple Silicon):** ${GITHUB_BASE}/Verboo-${VERSION_NUM}-arm64.dmg
+          **Linux (AppImage):** ${GITHUB_BASE}/Verboo-${VERSION_NUM}.AppImage
+          **Linux (deb):** ${GITHUB_BASE}/verboo_${VERSION_NUM}_amd64.deb
+
+          ---
+
+          **GitHub Release:** ${GITHUB_RELEASE}
+          **版本 / Version:** ${VERSION}
+          EOF
+
+          # 去除 heredoc 缩进
+          sed -i 's/^          //' upload/download.md
+
+          echo "Generated download.md:"
+          cat upload/download.md
+
       - name: Upload to Aliyun OSS
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
